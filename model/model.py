@@ -310,7 +310,7 @@ class HRGPT(nn.Module):
         x = self.transformer.ln_f(x)              # (B, T, n_embd)
         x = x[:, -1, :]                           # (B, n_embd) last token is enough because of masked attention
 
-        # ---- 2) Group by task for batched head forward ----
+        # Group by task for batched head forward
         task_to_indices = {}
         for i, tname in enumerate(task_names):
             task_to_indices.setdefault(tname, []).append(i)
@@ -340,26 +340,47 @@ class HRGPT(nn.Module):
         return avg_loss, task_avg_loss
 
     @torch.no_grad()
-    def predict(self, idx, max_new_tokens, temperature=1.0, do_sample=False, top_k=None):
-        for _ in range(max_new_tokens):
-            # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = idx if idx.size(1) <= self.block_size else idx[:, -self.block_size:]
-            # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
-            # pluck the logits at the final step and scale by desired temperature
-            logits = logits[:, -1, :] / temperature
-            # optionally crop the logits to only the top k options
-            if top_k is not None:
-                v, _ = torch.topk(logits, top_k)
-                logits[logits < v[:, [-1]]] = -float('Inf')
-            # apply softmax to convert logits to (normalized) probabilities
-            probs = F.softmax(logits, dim=-1)
-            # either sample from the distribution or take the most likely element
-            if do_sample:
-                idx_next = torch.multinomial(probs, num_samples=1)
-            else:
-                _, idx_next = torch.topk(probs, k=1, dim=-1)
-            # append sampled index to the running sequence and continue
-            idx = torch.cat((idx, idx_next), dim=1)
+    def predict(self, x: torch.Tensor, task_name: str):
+        """
+        x: [B, T] token ids
+        task_name: which task head to use (must exist in self.tasks / self.config.tasks)
 
-        return idx
+        Returns:
+        For classification (binary/multiclass):
+            {"pred": LongTensor[B], "probs": FloatTensor[B, C], "logits": FloatTensor[B, C]}
+        For regression:
+            {"pred": FloatTensor[B], "value": FloatTensor[B], "raw": FloatTensor[B, 1]}
+        """
+        self.eval()
+        device = x.device
+        b, t = x.size()
+        assert task_name in self.tasks, f"Unknown task '{task_name}'"
+        spec = self.config.tasks[task_name]
+        assert t <= self.block_size, f"seq len {t} > block_size {self.block_size}"
+
+        # ---- shared transformer forward (no mask, causal) ----
+        pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0)  # [1, T]
+        tok_emb = self.transformer.wte(x)            # [B, T, D]
+        pos_emb = self.transformer.wpe(pos)          # [1, T, D]
+        h = self.transformer.drop(tok_emb + pos_emb)
+        for blk in self.transformer.h:
+            h = blk(h)
+        h = self.transformer.ln_f(h)                 # [B, T, D]
+        h_last = h[:, -1, :]                         # [B, D]
+
+        # ---- task head ----
+        head = self.tasks[task_name]
+        logits = head(h_last)                        # [B, C] or [B, 1]
+
+        # ---- post-process per task type ----
+        if spec.task_type in ("binary", "multiclass"):
+            probs = F.softmax(logits, dim=-1)        # [B, C]  (binary C=2)
+            pred = probs.argmax(dim=-1)              # [B]
+            return {"pred": pred, "probs": probs, "logits": logits}
+
+        elif spec.task_type == "regression":
+            value = logits.squeeze(-1)               # [B]
+            return {"pred": value, "value": value, "raw": logits}
+
+        else:
+            raise ValueError(f"Unknown task_type: {spec.task_type}")
