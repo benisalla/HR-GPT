@@ -11,9 +11,6 @@ class TaskSpec:
     dropout: float = 0.2
 
 
-# drop constants/IDs
-COMMON_DROP = ["EmployeeNumber", "EmployeeCount", "Over18", "StandardHours"]
-
 # tasks
 TASKS = {
     "Attrition": TaskSpec(

@@ -1,5 +1,35 @@
-.ipynb_checkpoints/
+# Python cache
 __pycache__/
+*.py[cod]
+*.pyo
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Swap and temp files
 *.swp
-.env
+*.tmp
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Large data directories
+raw_data/
+toy_data/
+
+# Model checkpoints and outputs
+*.pt
+*.pth
+*.ckpt
+
+# Configs that should remain local
 .pylintrc
