@@ -1,0 +1,45 @@
+from transformers import GPT2TokenizerFast
+
+class MyTokenizer:
+    def __init__(self, pretrained_model_name: str = "gpt2"):
+        # Use the fast tokenizer
+        self.tokenizer = GPT2TokenizerFast.from_pretrained(pretrained_model_name)
+
+        # Keep GPT-2's original EOS; add BOS/PAD and any custom tokens.
+        special = {
+            "bos_token": "<sost>",
+            'eos_token': '<eost>', 
+            'pad_token': '<pad>', 
+            "additional_special_tokens": ["<ans>"],
+        }
+        self.tokenizer.add_special_tokens(special)
+        # Convenience IDs
+        self.bos_id = self.tokenizer.bos_token_id
+        self.eos_id = self.tokenizer.eos_token_id
+        self.pad_id = self.tokenizer.pad_token_id
+
+    def encode(self, text: str, add_bos: bool = True, add_eos: bool = True, **kwargs):
+        # GPT-2 doesn't auto-add BOS; we do it explicitly.
+        ids = self.tokenizer.encode(text, add_special_tokens=False, **kwargs)
+        if add_bos and self.bos_id is not None:
+            ids = [self.bos_id] + ids
+        if add_eos and self.eos_id is not None:
+            ids = ids + [self.eos_id]
+        return ids
+
+    def __call__(self, texts, padding=False, truncation=False, max_length=None, return_tensors=None):
+        # Batch-friendly API
+        return self.tokenizer(
+            texts,
+            padding=padding,
+            truncation=truncation,
+            max_length=max_length,
+            return_tensors=return_tensors,
+            add_special_tokens=False,  
+        )
+
+    def decode(self, token_ids, skip_special_tokens: bool = True):
+        return self.tokenizer.decode(token_ids, skip_special_tokens=skip_special_tokens)
+
+    def save(self, path: str):
+        self.tokenizer.save_pretrained(path)
