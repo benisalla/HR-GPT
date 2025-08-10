@@ -19,7 +19,6 @@ class MyTokenizer:
         self.pad_id = self.tokenizer.pad_token_id
 
     def encode(self, text: str, add_bos: bool = True, add_eos: bool = True, **kwargs):
-        # GPT-2 doesn't auto-add BOS; we do it explicitly.
         ids = self.tokenizer.encode(text, add_special_tokens=False, **kwargs)
         if add_bos and self.bos_id is not None:
             ids = [self.bos_id] + ids

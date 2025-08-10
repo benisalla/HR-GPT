@@ -1,4 +1,4 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Dict, Optional, Any
 
 # Task
@@ -10,6 +10,12 @@ class TaskSpec:
     mult_fact: int = 4                  # width factor for the head MLP
     dropout: float = 0.2
 
+@dataclass
+class DatasetConfig:
+    data_dir: str = "toy_data"
+    toks_in_batch: int = 1000
+    batch_size: int = 32
+    data_stats_path: str = "data_stats.json"
 
 # tasks
 TASKS = {
@@ -64,7 +70,10 @@ class GPTConfig:
     attn_pdrop: float  = 0.1
 
     # tasks
-    tasks: Dict[str, TaskSpec] = TASKS
+    tasks: Dict[str, TaskSpec] = field(default_factory=lambda: TASKS.copy())
+
+    # dataset config 
+    dataset: DatasetConfig = field(default_factory=DatasetConfig)
 
     def validate(self) -> "GPTConfig":
         if self.n_embd % self.n_head != 0:

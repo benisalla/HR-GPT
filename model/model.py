@@ -286,42 +286,58 @@ class HRGPT(nn.Module):
         optimizer = torch.optim.AdamW(optim_groups, lr=config.learning_rate, betas=config.betas)
         return optimizer
 
-    def forward(self, inputs, targets, task_name):
-        device = inputs.device
-        b, t = inputs.size()
-        assert t <= self.block_size, f"Cannot forward sequence of length {t}, block size is only {self.block_size}"
-        
-        pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0)  # shape (1, t)
 
-        # Forward the HRGPT model itself
-        tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (1, t, n_embd)
+
+
+    def forward(self, x_batch, x_mask, y_list, task_names):
+        """
+        x_batch: [B, T] token ids
+        x_mask:  [B, T] attention mask
+        y_list:  list of Tensors, each target for its task
+        task_names: list of str, task name per sample
+        """
+        device = x_batch.device
+        b, t = x_batch.size()
+        assert t <= self.block_size, f"Cannot forward sequence length {t}, block size is {self.block_size}"
+
+        # Shared Transformer
+        pos_enc = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0)
+        tok_emb = self.transformer.wte(x_batch)   # (B, T, n_embd)
+        pos_emb = self.transformer.wpe(pos_enc)   # (1, T, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
             x = block(x)
-        x = self.transformer.ln_f(x)
-        
-        # Select the appropriate head based on task_name
-        if task_name is None:
-            raise ValueError("task_name must be provided for selecting the correct head.")
-        
-        task_head = self.tasks.get(task_name)
-        if task_head is None:
-            raise ValueError(f"Task {task_name} is not defined in the tasks dictionary.")
-        
-        # Get logits from the task-specific head
-        logits = task_head(x)
+        x = self.transformer.ln_f(x)              # (B, T, n_embd)
+        x = x[:, -1, :]                           # (B, n_embd) last token is enough because of masked attention
 
-        # Calculate loss if targets are provided
-        loss = None
-        if targets is not None:
-            if task_name in ['binary', 'multiclass']:
-                loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
-            elif task_name == 'regression':
-                loss = F.mse_loss(logits.view(-1), targets.view(-1))
-        
-        return logits, loss
+        # ---- 2) Group by task for batched head forward ----
+        task_to_indices = {}
+        for i, tname in enumerate(task_names):
+            task_to_indices.setdefault(tname, []).append(i)
 
+        task_avg_loss = {}
+        total_loss = 0.0
+
+        for tname, indices in task_to_indices.items():
+            idx_tensor = torch.tensor(indices, dtype=torch.long, device=device)
+            x_task = x[idx_tensor]                              # (N_task, n_embd)
+            y_task = torch.stack([y_list[i] for i in indices])  
+            head = self.tasks[tname]
+            logits = head(x_task)
+
+            spec = self.config.tasks[tname]
+            if spec.task_type in ("binary", "multiclass"):
+                loss = F.cross_entropy(logits, y_task)
+            elif spec.task_type == "regression":
+                loss = F.mse_loss(logits.squeeze(-1), y_task)
+            else:
+                raise ValueError(f"Unknown task type {spec.task_type}")
+
+            task_avg_loss[tname] = loss.item()
+            total_loss += loss
+
+        avg_loss = total_loss / len(task_to_indices)
+        return avg_loss, task_avg_loss
 
     @torch.no_grad()
     def predict(self, idx, max_new_tokens, temperature=1.0, do_sample=False, top_k=None):
