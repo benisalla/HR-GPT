@@ -117,7 +117,7 @@ class TrainConfig:
     batch_size: int = 16
 
     # Training length
-    max_iters: Optional[int] = 1000  
+    max_iters: Optional[int] = 10_000  
 
     # Optimizer
     learning_rate: float = 3e-4
@@ -127,9 +127,11 @@ class TrainConfig:
 
     # Logging & eval
     log_interval: int = 100          # steps
-    eval_interval: int = 500         # steps
-    log_dir: str = "runs"
+    eval_interval: int = 1000         # steps
+    save_chpts_every : int = 1000  # steps
+    log_dir: str = "logs"
     experiment_name: str = "hr_gpt_training"
+    checkpoint_dir: str = "checkpoints"   
 
     # materials config
     device: str = "cpu"         

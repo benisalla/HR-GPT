@@ -2,10 +2,8 @@ import os
 import time
 import torch
 from collections import defaultdict
-from model.utils import CfgNode as CN
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from model.ml_config import GPTConfig, TrainConfig
+from model.config import GPTConfig, TrainConfig
 from model.model import HRGPT
 from dataset.tokenizer import MyTokenizer
 from dataset.BatchLoader import BatchLoader
@@ -17,9 +15,9 @@ class Trainer:
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.optimizer = model.get_optimizer(tr_config)
+        self.optimizer = model.get_optimizer(self.tr_config)
         self.callbacks = defaultdict(list)
-        self.device = tr_config.device
+        self.device = self.tr_config.device
         
         self.model = self.model.to(self.device)
         print(f"Running on device: {self.device}")
@@ -30,10 +28,15 @@ class Trainer:
         self.iter_dt = 0.0
         self.best_val_loss = float('inf')
 
+        # dirs
+        self.ckpt_dir = os.path.join(tr_config.checkpoint_dir, tr_config.experiment_name)
+        self.log_dir  = os.path.join(tr_config.log_dir, tr_config.experiment_name)
+        os.makedirs(self.ckpt_dir, exist_ok=True)   
+        os.makedirs(self.log_dir,  exist_ok=True)  
+
         # TensorBoard logging
-        log_dir = os.path.join(tr_config.log_dir, tr_config.experiment_name)
-        self.writer = SummaryWriter(log_dir=log_dir)
-        print(f"TensorBoard logs will be saved to: {log_dir}")
+        self.writer = SummaryWriter(log_dir=self.log_dir)
+        print(f"TensorBoard logs will be saved to: {self.log_dir}")
 
     def add_callback(self, onevent: str, callback):
         self.callbacks[onevent].append(callback)
@@ -47,47 +50,92 @@ class Trainer:
 
     @torch.no_grad()
     def evaluate(self):
-        """Evaluate the model on validation set"""
+        """Evaluate the model on validation set: loss + per-task metrics."""
         if self.val_loader is None:
             return {}
-        
+
         self.model.eval()
-        val_loader = DataLoader(
-            self.val_loader,
-            batch_size=self.tr_config.batch_size,
-            shuffle=False,
-            num_workers=self.tr_config.num_workers,
-            pin_memory=True
-        )
-        
+
         total_loss = 0.0
-        task_losses = defaultdict(list)
         num_batches = 0
-        
-        for batch_data in val_loader:
-            x_batch, x_mask, y_list, task_names = batch_data
-            
-            # Move to device
+
+        # aggregate per-task losses
+        task_losses = defaultdict(list)
+
+        # aggregate per-task metrics
+        cls_correct = defaultdict(int)   # classification: correct predictions
+        cls_total   = defaultdict(int)
+
+        reg_sse = defaultdict(float)     # regression: sum of squared errors
+        reg_sae = defaultdict(float)     # regression: sum of absolute errors
+        reg_cnt = defaultdict(int)       # regression: count
+
+        for x_batch, x_mask, y_list, task_names in self.val_loader:
+            # to device
             x_batch = x_batch.to(self.device)
-            x_mask = x_mask.to(self.device)
-            y_list = [y.to(self.device) for y in y_list]
-            
-            # Forward pass
+            x_mask  = x_mask.to(self.device)
+            y_list  = [y.to(self.device) for y in y_list]
+
+            # compute loss (model already groups by task internally)
             avg_loss, batch_task_losses = self.model(x_batch, x_mask, y_list, task_names)
-            
             total_loss += avg_loss.item()
             for task, loss in batch_task_losses.items():
                 task_losses[task].append(loss)
             num_batches += 1
-        
-        # Compute averages
+
+            # ---- compute metrics per task on this batch ----
+            # group indices by task
+            task_to_indices = defaultdict(list)
+            for i, tname in enumerate(task_names):
+                task_to_indices[tname].append(i)
+
+            for tname, idxs in task_to_indices.items():
+                indices = torch.tensor(idxs, dtype=torch.long, device=self.device)
+                x_task  = x_batch.index_select(0, indices)
+                y_task  = torch.stack([y_list[i] for i in idxs])
+
+                spec = self.model.config.tasks[tname]
+                # use model's predict for consistent head logic
+                out = self.model.predict(x_task, tname)
+
+                if spec.task_type in ("binary", "multiclass"):
+                    # y_task is class indices
+                    pred = out["pred"]                    # [N]
+                    cls_correct[tname] += (pred == y_task).sum().item()
+                    cls_total[tname]   += y_task.numel()
+                elif spec.task_type == "regression":
+                    # y_task and predicted value are floats
+                    val  = out["value"].view(-1)          # [N]
+                    yvec = y_task.view(-1)
+                    diff = val - yvec
+                    reg_sse[tname] += torch.sum(diff * diff).item()
+                    reg_sae[tname] += torch.sum(diff.abs()).item()
+                    reg_cnt[tname]  += yvec.numel()
+                else:
+                    raise ValueError(f"Unknown task type for metrics: {spec.task_type}")
+
+        # ---- finalize metrics ----
         val_metrics = {
-            'val/total_loss': total_loss / num_batches,
+            "val/total_loss": total_loss / max(1, num_batches),
         }
-        
+        # average task losses
         for task, losses in task_losses.items():
-            val_metrics[f'val/{task}_loss'] = sum(losses) / len(losses)
-        
+            val_metrics[f"val/{task}_loss"] = sum(losses) / len(losses)
+
+        # classification accuracies
+        for task, tot in cls_total.items():
+            if tot > 0:
+                acc = cls_correct[task] / tot
+                val_metrics[f"val/{task}_acc"] = acc
+
+        # regression MSE/MAE
+        for task, cnt in reg_cnt.items():
+            if cnt > 0:
+                mse = reg_sse[task] / cnt
+                mae = reg_sae[task] / cnt
+                val_metrics[f"val/{task}_mse"] = mse
+                val_metrics[f"val/{task}_mae"] = mae
+
         self.model.train()
         return val_metrics
 
@@ -101,26 +149,23 @@ class Trainer:
             metrics_str = " | ".join([f"{k}: {v:.4f}" for k, v in metrics.items()])
             print(f"Step {step} | {metrics_str} | dt: {self.iter_dt:.3f}s")
 
-    def save_checkpoint(self, filepath):
-        """Save model checkpoint"""
-        checkpoint = {
-            'iter_num': self.iter_num,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'tr_config': self.tr_config.to_dict(),
-            'best_val_loss': self.best_val_loss,
-        }
-        torch.save(checkpoint, filepath)
-        print(f"Checkpoint saved to {filepath}")
+    def save_checkpoint(self, tag: str = "latest"):
+        path = os.path.join(self.ckpt_dir, f"{tag}.pt")
+        torch.save({
+            "model": self.model.state_dict(),
+            "optim": self.optimizer.state_dict(),
+            "iter": self.iter_num,
+            "best_val_loss": self.best_val_loss,
+            "config": self.tr_config.__dict__,
+        }, path)
+        return path
 
-    def load_checkpoint(self, filepath):
-        """Load model checkpoint"""
-        checkpoint = torch.load(filepath, map_location=self.device)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.iter_num = checkpoint['iter_num']
-        self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
-        print(f"Checkpoint loaded from {filepath}")
+    def load_checkpoint(self, path: str):
+        ckpt = torch.load(path, map_location=self.device)
+        self.model.load_state_dict(ckpt["model"])
+        self.optimizer.load_state_dict(ckpt["optim"])
+        self.iter_num = ckpt.get("iter", 0)
+        self.best_val_loss = ckpt.get("best_val_loss", float('inf'))
 
     def run(self):
         """Main training loop"""
@@ -139,18 +184,19 @@ class Trainer:
                 x_mask = x_mask.to(self.device)  
                 y_list = [y.to(self.device) for y in y_list]
 
-                # Forward pass
-                avg_loss, task_losses = model(x_batch, x_mask, y_list, task_names)
-                self.loss = avg_loss.item()
-
-                # Backprop and update parameters
+                # Forward -> Backprop and update parameters
+                scaler = torch.cuda.amp.GradScaler(enabled=self.tr_config.amp and self.device.startswith("cuda"))
+                with torch.cuda.amp.autocast(enabled=self.tr_config.amp and self.device.startswith("cuda")):
+                    avg_loss, task_losses = self.model(x_batch, x_mask, y_list, task_names)
                 self.optimizer.zero_grad(set_to_none=True)
-                avg_loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), tr_config.grad_norm_clip)
-                self.optimizer.step()
+                scaler.scale(avg_loss).backward()
+                scaler.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.tr_config.grad_norm_clip)
+                scaler.step(self.optimizer)
+                scaler.update()
 
                 # Logging
-                if self.iter_num % tr_config.log_interval == 0:
+                if self.iter_num % self.tr_config.log_interval == 0:
                     metrics = {
                         'train/total_loss': avg_loss.item(),
                         'train/learning_rate': self.optimizer.param_groups[0]['lr'],
@@ -206,15 +252,13 @@ ml_config = GPTConfig()
 tr_config = TrainConfig(
     num_workers=4,
     batch_size=16,
-    max_iters=1000,
+    max_iters=100_000,
     learning_rate=3e-4,
     betas=(0.9, 0.95),
     weight_decay=0.1,
     grad_norm_clip=1.0,
     log_interval=100,
     eval_interval=500,
-    log_dir="runs",
-    experiment_name="hr_gpt_training",
     device= "cuda" if torch.cuda.is_available() else "cpu",
     amp=True,
 )
@@ -227,8 +271,8 @@ ml_config.vocab_size = len(tokenizer.tokenizer)
 model = HRGPT(ml_config)
 
 # Create datasets
-train_loader = BatchLoader(ml_config, "train", tokenizer, device="cpu")
-val_loader = BatchLoader(ml_config, "val", tokenizer, device="cpu")
+train_loader = BatchLoader(ml_config, "train", tokenizer, device=tr_config.device)
+val_loader = BatchLoader(ml_config, "val", tokenizer, device=tr_config.device)
 
 # Create trainer
 trainer = Trainer(tr_config, model, train_loader, val_loader)

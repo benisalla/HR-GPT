@@ -282,17 +282,19 @@ class HRGPT(nn.Module):
         decay = set()
         no_decay = set()
         whitelist_weight_modules = (torch.nn.Linear,)
-        blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding)
+        blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding, LayerNorm)
 
         # classify decay/no_decay
         for mn, m in self.named_modules():
-            for pn, _ in m.named_parameters():
+            for pn, p in m.named_parameters():
                 fpn = '%s.%s' % (mn, pn) if mn else pn  
                 if pn.endswith('bias'):
                     no_decay.add(fpn)
                 elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
                     decay.add(fpn)
                 elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
+                    no_decay.add(fpn)
+                elif pn == 'scale':  # Handle the scale parameter from RegressionHead
                     no_decay.add(fpn)
 
         # Validate Classification
