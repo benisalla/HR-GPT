@@ -1,8 +1,9 @@
 import math
-from model.config import GPTConfig
 import torch
 import torch.nn as nn
+from model.config import GPTConfig
 from torch.nn import functional as F
+from transformers import GPT2LMHeadModel
 
 class GELU(nn.Module):
     "Same as torch.nn.GELU(approximate='tanh')"
@@ -38,11 +39,12 @@ class CausalSelfAttention(nn.Module):
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
 
         # regularization
-        self.attn_dropout = nn.Dropout(config.dropout)
-        self.resid_dropout = nn.Dropout(config.dropout)
+        self.attn_pdrop = config.attn_pdrop
+        self.resid_pdrop = config.resid_pdrop
+        self.attn_dropout = nn.Dropout(config.attn_pdrop)
+        self.resid_dropout = nn.Dropout(config.resid_pdrop)
         self.n_head = config.n_head
         self.n_embd = config.n_embd
-        self.dropout = config.dropout
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
             print("WARNING: Using the standard attention mechanism. Flash Attention requires PyTorch version 2.0 or higher.")
@@ -57,7 +59,7 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)   
 
         if self.flash:
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.resid_pdrop if self.training else 0, is_causal=True)
         else:
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
@@ -75,7 +77,7 @@ class FeedForward(nn.Module):
         self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.gelu    = GELU()
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
-        self.dropout = nn.Dropout(config.dropout)
+        self.dropout = nn.Dropout(config.resid_pdrop)
 
     def forward(self, x):
         x = self.c_fc(x)
@@ -178,15 +180,19 @@ class HRGPT(nn.Module):
             ln_f = nn.LayerNorm(config.n_embd),
         ))
 
+        print("Creating task heads...")
         # tasks' heads 
         self.tasks = get_task_heads(config)
 
+        print("applying initial weights ...")
         # init all weights
-        self.apply(self._init_weights)
+        self.apply(self.__init_weights__)
 
+        print("Initializing from pretrained GPT-2 weights...")
         # init model
-        self.__init_from_pretrained__(config)
+        self.__init_from_pretrained__()
 
+        print("displaying model stats...")
         # display stats of the model and his head
         self.__model_stats__()
 
@@ -222,37 +228,151 @@ class HRGPT(nn.Module):
             torch.nn.init.zeros_(module.bias)
             torch.nn.init.ones_(module.weight)
 
-    def __init_from_pretrained__(self, config):
-        # Initialize the base model (HRGPT)
-        model = HRGPT(config)
-        sd = model.state_dict()
+        # # --- DEBUG: inspect keys and shapes ---
+        # def _dump_keys(name, keys, path=None, limit=50):
+        #     print(f"[{name}] total keys: {len(keys)}")
+        #     for k in keys[:limit]:
+        #         print("  ", k)
+        #     if path is not None:
+        #         with open(path, "w", encoding="utf-8") as f:
+        #             for k in keys:
+        #                 f.write(k + "\n")
+        #         print(f"[{name}] full list written to: {path}")
 
-        # Load a pretrained GPT-2 model
-        model_hf = GPT2LMHeadModel.from_pretrained("gpt2")
-        sd_hf = model_hf.state_dict()
+        # self_keys = list(sd.keys())
+        # hf_keys   = list(sd_hf.keys())
 
-        # Copy transformer layers (excluding heads)
-        keys = [k for k in sd_hf if not k.endswith('attn.masked_bias')]  
-        transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
-        assert len(keys) == len(sd), "Mismatch between pretrained model and target model"
+        # _dump_keys("SELF (all)", self_keys, path="self_keys.txt")
+        # _dump_keys("HF   (all)", hf_keys,   path="hf_keys.txt")
 
-        for k in keys:
-            if any(k.endswith(w) for w in transposed):
-                assert sd_hf[k].shape[::-1] == sd[k].shape, f"Shape mismatch for {k}"
-                with torch.no_grad():
-                    sd[k].copy_(sd_hf[k].t())  
-            else:
-                assert sd_hf[k].shape == sd[k].shape, f"Shape mismatch for {k}"
-                with torch.no_grad():
-                    sd[k].copy_(sd_hf[k]) 
+        # # Focus only on transformer weights (HF has extra like 'lm_head.weight')
+        # self_tx = [k for k in self_keys if k.startswith("transformer.")]
+        # hf_tx   = [k for k in hf_keys   if k.startswith("transformer.")]
+        # _dump_keys("SELF.transformer", self_tx, path="self_transformer_keys.txt")
+        # _dump_keys("HF.transformer",   hf_tx,   path="hf_transformer_keys.txt")
 
-        # Now handle the task heads
+        # # Keys present only on one side
+        # only_self = sorted(set(self_keys) - set(hf_keys))
+        # only_hf   = sorted(set(hf_keys)   - set(self_keys))
+        # print("\n[ONLY IN SELF] (first 50)")
+        # for k in only_self[:50]:
+        #     print("  ", k)
+        # print(f"... total {len(only_self)}\n")
+
+        # print("[ONLY IN HF] (first 50)")
+        # for k in only_hf[:50]:
+        #     print("  ", k)
+        # print(f"... total {len(only_hf)}\n")
+
+        # # On the common transformer keys, check shape mismatches
+        # common_tx = sorted(set(self_tx) & set(hf_tx))
+        # mismatch  = []
+        # for k in common_tx:
+        #     shf = sd_hf[k].shape
+        #     sself = sd[k].shape
+        #     if not (shf == sself or shf[::-1] == sself):  # account for Conv1D transposed
+        #         mismatch.append((k, shf, sself))
+
+        # print(f"[TRANSFORMER] common: {len(common_tx)}, shape mismatches: {len(mismatch)}")
+        # for k, shf, sself in mismatch[:50]:
+        #     print(f"  {k}: hf {shf} vs self {sself}")
+
+        # # Optional: show a few typical transposed candidates
+        # print("\n[LIKELY TRANSPOSE NEEDED if shapes are reversed]")
+        # for suf in ("attn.c_attn.weight","attn.c_proj.weight","mlp.c_fc.weight","mlp.c_proj.weight"):
+        #     hits = [k for k in common_tx if k.endswith(suf)]
+        #     for k in hits[:8]:
+        #         shf, sself = sd_hf[k].shape, sd[k].shape
+        #         if shf[::-1] == sself:
+        #             print("  ", k, shf, "->", sself, "(transpose)")
+        # # --- END DEBUG ---
+
+
+
+    # def __init_from_pretrained__(self):
+    #     # Initialize the base model (HRGPT)
+    #     sd = self.state_dict()
+
+    #     # Load a pretrained GPT-2 model
+    #     print(f"Loading pretrained GPT-2 model...")
+    #     model_hf = GPT2LMHeadModel.from_pretrained("gpt2")
+    #     print(f"Pretrained model loaded with {sum(p.numel() for p in model_hf.parameters()) / 1e6:.2f}M parameters.")
+    #     sd_hf = model_hf.state_dict()
+
+    #     # Copy transformer layers (excluding heads)
+    #     keys = [k for k in sd_hf if not k.endswith('attn.masked_bias')]  
+    #     transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
+    #     assert len(keys) == len(sd), "Mismatch between pretrained model and target model"
+
+    #     for k in keys:
+    #         if any(k.endswith(w) for w in transposed):
+    #             assert sd_hf[k].shape[::-1] == sd[k].shape, f"Shape mismatch for {k}"
+    #             with torch.no_grad():
+    #                 sd[k].copy_(sd_hf[k].t())  
+    #         else:
+    #             assert sd_hf[k].shape == sd[k].shape, f"Shape mismatch for {k}"
+    #             with torch.no_grad():
+    #                 sd[k].copy_(sd_hf[k]) 
+
+    #     # Now handle the task heads
+    #     for _, task_head in self.tasks.items():
+    #         if isinstance(task_head, nn.Module):
+    #             task_head.apply(self._init_weights) 
+
+    #     # Init the pretrained model
+    #     self.load_state_dict(sd, strict=False)
+
+
+    def __init_from_pretrained__(self):
+        # our params
+        sd = self.state_dict()
+
+        # load HF GPT-2
+        print("Loading pretrained GPT-2 model...")
+        hf = GPT2LMHeadModel.from_pretrained("gpt2")
+        print(f"Pretrained model loaded with {sum(p.numel() for p in hf.parameters()) / 1e6:.2f}M parameters.")
+        sd_hf = hf.state_dict()
+
+        # copy ONLY transformer weights 
+        hf_keys = [k for k in sd_hf.keys() if k.startswith("transformer.")]
+        transposed = (
+            "attn.c_attn.weight",
+            "attn.c_proj.weight",
+            "mlp.c_fc.weight",
+            "mlp.c_proj.weight",
+        )
+
+        copied, skipped = 0, 0
+        for k in hf_keys:
+            if k not in sd:
+                skipped += 1
+                print(f"[skip] missing in SELF: {k}")
+                continue
+
+            v_hf, v_self = sd_hf[k], sd[k]
+            try:
+                if any(k.endswith(suf) for suf in transposed):
+                    assert v_hf.shape[::-1] == v_self.shape, f"Shape mismatch for {k}: {v_hf.shape} vs {v_self.shape}"
+                    with torch.no_grad():
+                        v_self.copy_(v_hf.t())
+                else:
+                    assert v_hf.shape == v_self.shape, f"Shape mismatch for {k}: {v_hf.shape} vs {v_self.shape}"
+                    with torch.no_grad():
+                        v_self.copy_(v_hf)
+                copied += 1
+            except AssertionError as e:
+                skipped += 1
+                print(f"[skip] {e}")
+
+        # init our task heads (custom) — keep your original intent
         for _, task_head in self.tasks.items():
             if isinstance(task_head, nn.Module):
-                task_head.apply(self._init_weights) 
+                task_head.apply(self.__init_weights__)
 
-        # Init the pretrained model
-        self.model = model
+        # load back into self (non-transformer keys remain as-initialized)
+        self.load_state_dict(sd, strict=False)
+        print(f"Copied {copied} transformer tensors from GPT-2, skipped {skipped}.")
+
 
     def get_optimizer(self, config):
         decay = set()
@@ -286,9 +406,6 @@ class HRGPT(nn.Module):
         optimizer = torch.optim.AdamW(optim_groups, lr=config.learning_rate, betas=config.betas)
         return optimizer
 
-
-
-
     def forward(self, x_batch, x_mask, y_list, task_names):
         """
         x_batch: [B, T] token ids
@@ -296,12 +413,28 @@ class HRGPT(nn.Module):
         y_list:  list of Tensors, each target for its task
         task_names: list of str, task name per sample
         """
-        device = x_batch.device
-        b, t = x_batch.size()
-        assert t <= self.block_size, f"Cannot forward sequence length {t}, block size is {self.block_size}"
+        assert x_batch.dtype == torch.long, f"x_batch must be LongTensor, got {x_batch.dtype}"
+        B, T = x_batch.size()
+        assert T <= self.block_size, f"T={T} > block_size={self.block_size}"
+
+        vocab_size = self.transformer.wte.num_embeddings
+        max_token = int(x_batch.max().item()) if x_batch.numel() else -1
+        min_token = int(x_batch.min().item()) if x_batch.numel() else -1
+        assert 0 <= min_token, f"Found negative token id: {min_token}"
+        assert max_token < vocab_size, (
+            f"Token id {max_token} >= vocab_size {vocab_size}. "
+            f"Check tokenizer vs config.vocab_size."
+        )
+
+        # also position embedding range
+        pos_enc = torch.arange(0, T, dtype=torch.long, device=x_batch.device).unsqueeze(0)
+        wpe_n = self.transformer.wpe.num_embeddings
+        assert T <= wpe_n, f"Need {T} positions, but wpe has {wpe_n}"
+
+
 
         # Shared Transformer
-        pos_enc = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0)
+        pos_enc = torch.arange(0, T, dtype=torch.long, device=self.config.device).unsqueeze(0)
         tok_emb = self.transformer.wte(x_batch)   # (B, T, n_embd)
         pos_emb = self.transformer.wpe(pos_enc)   # (1, T, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
@@ -319,7 +452,7 @@ class HRGPT(nn.Module):
         total_loss = 0.0
 
         for tname, indices in task_to_indices.items():
-            idx_tensor = torch.tensor(indices, dtype=torch.long, device=device)
+            idx_tensor = torch.tensor(indices, dtype=torch.long, device=self.config.device)
             x_task = x[idx_tensor]                              # (N_task, n_embd)
             y_task = torch.stack([y_list[i] for i in indices])  
             head = self.tasks[tname]
