@@ -14,6 +14,8 @@ __pycache__/
 .venv/
 env/
 venv/
+logs/
+checkpoints/
 
 # OS-specific files
 .DS_Store
