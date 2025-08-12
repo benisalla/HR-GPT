@@ -139,15 +139,18 @@ class Trainer:
         self.model.train()
         return val_metrics
 
-    def log_metrics(self, metrics, step):
-        """Log metrics to TensorBoard and console"""
+    def log_metrics(self, metrics, step, tag: str):
+        """Log everything to TensorBoard; print a short, organized line to console."""
+        # TensorBoard (full)
         for key, value in metrics.items():
             self.writer.add_scalar(key, value, step)
-        
-        # Console logging
+
+        # Console (short)
         if step % self.tr_config.log_interval == 0:
-            metrics_str = " | ".join([f"{k}: {v:.4f}" for k, v in metrics.items()])
-            print(f"Step {step} | {metrics_str} | dt: {self.iter_dt:.3f}s")
+            if tag == "train":
+                self._print_train_line(step, metrics)
+            elif tag == "val":
+                self._print_eval_line(step, metrics)
 
     def save_checkpoint(self, tag: str = "latest"):
         path = os.path.join(self.ckpt_dir, f"{tag}.pt")
@@ -166,6 +169,48 @@ class Trainer:
         self.optimizer.load_state_dict(ckpt["optim"])
         self.iter_num = ckpt.get("iter", 0)
         self.best_val_loss = ckpt.get("best_val_loss", float('inf'))
+
+    def _key_metric_for_task(self, task_name: str, metrics: dict) -> tuple[str, float | None]:
+        """Pick one console metric per task: acc for classification, mse for regression."""
+        spec = self.model.config.tasks[task_name]
+        if spec.task_type in ("binary", "multiclass"):
+            key = f"val/{task_name}_acc"
+        elif spec.task_type == "regression":
+            key = f"val/{task_name}_mse"   # or use _mae if you prefer
+        else:
+            return ("", None)
+        return (key, metrics.get(key, None))
+
+    def _print_train_line(self, step: int, metrics: dict):
+        it_s = (1.0 / max(self.iter_dt, 1e-9))
+        line = (
+            f"[{step}] "
+            f"train_loss={metrics.get('train/total_loss', float('nan')):.4f} "
+            f"lr={metrics.get('train/learning_rate', 0.0):.2e} "
+            f"it/s={it_s:.2f} "
+            f"best_val={self.best_val_loss:.4f}"
+        )
+        print(line)
+
+    def _print_eval_line(self, step: int, metrics: dict):
+        base = f"[{step}] val_loss={metrics.get('val/total_loss', float('nan')):.4f}"
+
+        # choose at most 3 tasks to display
+        task_names = list(self.model.config.tasks.keys())
+        shown = []
+        for t in task_names[:3]:
+            k, v = self._key_metric_for_task(t, metrics)
+            if k and v is not None:
+                shown.append(f"{t}:{k.split('_')[-1]}={v:.4f}")  # prints acc= or mse=
+
+        more = ""
+        if len(task_names) > 3:
+            more = f" (+{len(task_names) - 3} more)"
+
+        if shown:
+            print(base + " | " + " | ".join(shown) + more)
+        else:
+            print(base)
 
     def run(self):
         """Main training loop"""
