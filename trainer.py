@@ -114,7 +114,7 @@ class Trainer:
                 else:
                     raise ValueError(f"Unknown task type for metrics: {spec.task_type}")
 
-        # ---- finalize metrics ----
+        # finalize metrics
         val_metrics = {
             "val/total_loss": total_loss / max(1, num_batches),
         }
@@ -126,7 +126,7 @@ class Trainer:
         for task, tot in cls_total.items():
             if tot > 0:
                 acc = cls_correct[task] / tot
-                val_metrics[f"val/{task}_acc"] = acc
+                val_metrics[f"val/{task}_acc"] = acc * 100.0 
 
         # regression MSE/MAE
         for task, cnt in reg_cnt.items():
@@ -176,7 +176,7 @@ class Trainer:
         if spec.task_type in ("binary", "multiclass"):
             key = f"val/{task_name}_acc"
         elif spec.task_type == "regression":
-            key = f"val/{task_name}_mse"   # or use _mae if you prefer
+            key = f"val/{task_name}_mse"  
         else:
             return ("", None)
         return (key, metrics.get(key, None))
@@ -201,7 +201,7 @@ class Trainer:
         for t in task_names[:3]:
             k, v = self._key_metric_for_task(t, metrics)
             if k and v is not None:
-                shown.append(f"{t}:{k.split('_')[-1]}={v:.4f}")  # prints acc= or mse=
+                shown.append(f"{t}:{k.split('_')[-1]}={v:.4f}") 
 
         more = ""
         if len(task_names) > 3:
@@ -251,13 +251,13 @@ class Trainer:
                     for task, loss in task_losses.items():
                         metrics[f'train/{task}_loss'] = loss
                     
-                    self.log_metrics(metrics, self.iter_num)
+                    self.log_metrics(metrics, self.iter_num, tag="train")
 
                 # Evaluation
                 if self.iter_num % tr_config.eval_interval == 0 and self.val_loader is not None:
                     val_metrics = self.evaluate()
                     if val_metrics:
-                        self.log_metrics(val_metrics, self.iter_num)
+                        self.log_metrics(val_metrics, self.iter_num, tag="val")
                         
                         # Save best model
                         val_loss = val_metrics['val/total_loss']
@@ -296,8 +296,8 @@ class Trainer:
 ml_config = GPTConfig()
 tr_config = TrainConfig(
     num_workers=4,
-    batch_size=16,
-    max_iters=100_000,
+    batch_size=64,
+    max_iters=1_00_000,
     learning_rate=3e-4,
     betas=(0.9, 0.95),
     weight_decay=0.1,
