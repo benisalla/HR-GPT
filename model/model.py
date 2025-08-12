@@ -1,7 +1,7 @@
 import math
 import torch
 import torch.nn as nn
-from model.config import GPTConfig
+from model.config import GPTConfig, TrainConfig
 from torch.nn import functional as F
 from transformers import GPT2LMHeadModel
 
@@ -278,7 +278,7 @@ class HRGPT(nn.Module):
         self.load_state_dict(sd, strict=False)
         print(f"Copied {copied} transformer tensors from GPT-2, skipped {skipped}.")
 
-    def get_optimizer(self, config):
+    def get_optimizer(self, tr_config: TrainConfig) -> torch.optim.Optimizer:
         decay = set()
         no_decay = set()
         whitelist_weight_modules = (torch.nn.Linear,)
@@ -304,10 +304,10 @@ class HRGPT(nn.Module):
 
         # Create the optimizer with separate weight decay for different parameter groups
         optim_groups = [
-            {"params": [param_dict[pn] for pn in decay], "weight_decay": config.weight_decay},
+            {"params": [param_dict[pn] for pn in decay], "weight_decay": tr_config.weight_decay},
             {"params": [param_dict[pn] for pn in no_decay], "weight_decay": 0.0},
         ]
-        optimizer = torch.optim.AdamW(optim_groups, lr=config.learning_rate, betas=config.betas)
+        optimizer = torch.optim.AdamW(optim_groups, lr=tr_config.learning_rate, betas=tr_config.betas)
         return optimizer
 
     def forward(self, x_batch, x_mask, y_list, task_names):

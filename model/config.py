@@ -1,5 +1,6 @@
 from dataclasses import dataclass, asdict, field
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Tuple
+
 
 # Task
 @dataclass
@@ -106,3 +107,68 @@ class GPTConfig:
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "GPTConfig":
         return cls(**d).validate()
+    
+
+# Training configuration
+@dataclass
+class TrainConfig:
+    # Dataloader / runtime
+    num_workers: int = 4
+    batch_size: int = 16
+
+    # Training length
+    max_iters: Optional[int] = 1000  
+
+    # Optimizer
+    learning_rate: float = 3e-4
+    betas: Tuple[float, float] = (0.9, 0.95)
+    weight_decay: float = 0.1
+    grad_norm_clip: float = 1.0
+
+    # Logging & eval
+    log_interval: int = 100          # steps
+    eval_interval: int = 500         # steps
+    log_dir: str = "runs"
+    experiment_name: str = "hr_gpt_training"
+
+    # materials config
+    device: str = "cpu"         
+    amp: bool = True            
+
+    # some utilities
+    def validate(self) -> "TrainConfig":
+        if self.batch_size <= 0:
+            raise ValueError("batch_size must be > 0")
+        if self.max_iters is not None and self.max_iters <= 0:
+            raise ValueError("max_iters must be None or > 0")
+        if self.learning_rate <= 0:
+            raise ValueError("learning_rate must be > 0")
+        if self.grad_norm_clip is not None and self.grad_norm_clip <= 0:
+            raise ValueError("grad_norm_clip must be None or > 0")
+        if self.log_interval <= 0:
+            raise ValueError("log_interval must be > 0")
+        if self.eval_interval <= 0:
+            raise ValueError("eval_interval must be > 0")
+        return self
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    def update(self, **kwargs) -> "TrainConfig":
+        for k, v in kwargs.items():
+            if not hasattr(self, k):
+                raise AttributeError(f"Unknown train config field: {k}")
+            setattr(self, k, v)
+        return self.validate()
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "TrainConfig":
+        return cls(**d).validate()
+
+    @property
+    def log_every(self) -> int:
+        return self.log_interval
+    
+    @property
+    def val_every(self) -> int:
+        return self.eval_interval
