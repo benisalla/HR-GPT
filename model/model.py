@@ -228,101 +228,6 @@ class HRGPT(nn.Module):
             torch.nn.init.zeros_(module.bias)
             torch.nn.init.ones_(module.weight)
 
-        # # --- DEBUG: inspect keys and shapes ---
-        # def _dump_keys(name, keys, path=None, limit=50):
-        #     print(f"[{name}] total keys: {len(keys)}")
-        #     for k in keys[:limit]:
-        #         print("  ", k)
-        #     if path is not None:
-        #         with open(path, "w", encoding="utf-8") as f:
-        #             for k in keys:
-        #                 f.write(k + "\n")
-        #         print(f"[{name}] full list written to: {path}")
-
-        # self_keys = list(sd.keys())
-        # hf_keys   = list(sd_hf.keys())
-
-        # _dump_keys("SELF (all)", self_keys, path="self_keys.txt")
-        # _dump_keys("HF   (all)", hf_keys,   path="hf_keys.txt")
-
-        # # Focus only on transformer weights (HF has extra like 'lm_head.weight')
-        # self_tx = [k for k in self_keys if k.startswith("transformer.")]
-        # hf_tx   = [k for k in hf_keys   if k.startswith("transformer.")]
-        # _dump_keys("SELF.transformer", self_tx, path="self_transformer_keys.txt")
-        # _dump_keys("HF.transformer",   hf_tx,   path="hf_transformer_keys.txt")
-
-        # # Keys present only on one side
-        # only_self = sorted(set(self_keys) - set(hf_keys))
-        # only_hf   = sorted(set(hf_keys)   - set(self_keys))
-        # print("\n[ONLY IN SELF] (first 50)")
-        # for k in only_self[:50]:
-        #     print("  ", k)
-        # print(f"... total {len(only_self)}\n")
-
-        # print("[ONLY IN HF] (first 50)")
-        # for k in only_hf[:50]:
-        #     print("  ", k)
-        # print(f"... total {len(only_hf)}\n")
-
-        # # On the common transformer keys, check shape mismatches
-        # common_tx = sorted(set(self_tx) & set(hf_tx))
-        # mismatch  = []
-        # for k in common_tx:
-        #     shf = sd_hf[k].shape
-        #     sself = sd[k].shape
-        #     if not (shf == sself or shf[::-1] == sself):  # account for Conv1D transposed
-        #         mismatch.append((k, shf, sself))
-
-        # print(f"[TRANSFORMER] common: {len(common_tx)}, shape mismatches: {len(mismatch)}")
-        # for k, shf, sself in mismatch[:50]:
-        #     print(f"  {k}: hf {shf} vs self {sself}")
-
-        # # Optional: show a few typical transposed candidates
-        # print("\n[LIKELY TRANSPOSE NEEDED if shapes are reversed]")
-        # for suf in ("attn.c_attn.weight","attn.c_proj.weight","mlp.c_fc.weight","mlp.c_proj.weight"):
-        #     hits = [k for k in common_tx if k.endswith(suf)]
-        #     for k in hits[:8]:
-        #         shf, sself = sd_hf[k].shape, sd[k].shape
-        #         if shf[::-1] == sself:
-        #             print("  ", k, shf, "->", sself, "(transpose)")
-        # # --- END DEBUG ---
-
-
-
-    # def __init_from_pretrained__(self):
-    #     # Initialize the base model (HRGPT)
-    #     sd = self.state_dict()
-
-    #     # Load a pretrained GPT-2 model
-    #     print(f"Loading pretrained GPT-2 model...")
-    #     model_hf = GPT2LMHeadModel.from_pretrained("gpt2")
-    #     print(f"Pretrained model loaded with {sum(p.numel() for p in model_hf.parameters()) / 1e6:.2f}M parameters.")
-    #     sd_hf = model_hf.state_dict()
-
-    #     # Copy transformer layers (excluding heads)
-    #     keys = [k for k in sd_hf if not k.endswith('attn.masked_bias')]  
-    #     transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
-    #     assert len(keys) == len(sd), "Mismatch between pretrained model and target model"
-
-    #     for k in keys:
-    #         if any(k.endswith(w) for w in transposed):
-    #             assert sd_hf[k].shape[::-1] == sd[k].shape, f"Shape mismatch for {k}"
-    #             with torch.no_grad():
-    #                 sd[k].copy_(sd_hf[k].t())  
-    #         else:
-    #             assert sd_hf[k].shape == sd[k].shape, f"Shape mismatch for {k}"
-    #             with torch.no_grad():
-    #                 sd[k].copy_(sd_hf[k]) 
-
-    #     # Now handle the task heads
-    #     for _, task_head in self.tasks.items():
-    #         if isinstance(task_head, nn.Module):
-    #             task_head.apply(self._init_weights) 
-
-    #     # Init the pretrained model
-    #     self.load_state_dict(sd, strict=False)
-
-
     def __init_from_pretrained__(self):
         # our params
         sd = self.state_dict()
@@ -373,7 +278,6 @@ class HRGPT(nn.Module):
         self.load_state_dict(sd, strict=False)
         print(f"Copied {copied} transformer tensors from GPT-2, skipped {skipped}.")
 
-
     def get_optimizer(self, config):
         decay = set()
         no_decay = set()
@@ -407,37 +311,16 @@ class HRGPT(nn.Module):
         return optimizer
 
     def forward(self, x_batch, x_mask, y_list, task_names):
-        """
-        x_batch: [B, T] token ids
-        x_mask:  [B, T] attention mask
-        y_list:  list of Tensors, each target for its task
-        task_names: list of str, task name per sample
-        """
-        assert x_batch.dtype == torch.long, f"x_batch must be LongTensor, got {x_batch.dtype}"
         B, T = x_batch.size()
+        device = x_batch.device
         assert T <= self.block_size, f"T={T} > block_size={self.block_size}"
 
-        vocab_size = self.transformer.wte.num_embeddings
-        max_token = int(x_batch.max().item()) if x_batch.numel() else -1
-        min_token = int(x_batch.min().item()) if x_batch.numel() else -1
-        assert 0 <= min_token, f"Found negative token id: {min_token}"
-        assert max_token < vocab_size, (
-            f"Token id {max_token} >= vocab_size {vocab_size}. "
-            f"Check tokenizer vs config.vocab_size."
-        )
-
-        # also position embedding range
-        pos_enc = torch.arange(0, T, dtype=torch.long, device=x_batch.device).unsqueeze(0)
-        wpe_n = self.transformer.wpe.num_embeddings
-        assert T <= wpe_n, f"Need {T} positions, but wpe has {wpe_n}"
-
-
-
         # Shared Transformer
-        pos_enc = torch.arange(0, T, dtype=torch.long, device=self.config.device).unsqueeze(0)
+        pos_enc = torch.arange(0, T, dtype=torch.long, device=x_batch.device).unsqueeze(0)
         tok_emb = self.transformer.wte(x_batch)   # (B, T, n_embd)
         pos_emb = self.transformer.wpe(pos_enc)   # (1, T, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
+        x = self.transformer.drop((tok_emb + pos_emb) * x_mask.unsqueeze(-1))
+
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)              # (B, T, n_embd)
@@ -452,7 +335,7 @@ class HRGPT(nn.Module):
         total_loss = 0.0
 
         for tname, indices in task_to_indices.items():
-            idx_tensor = torch.tensor(indices, dtype=torch.long, device=self.config.device)
+            idx_tensor = torch.tensor(indices, dtype=torch.long, device=device)
             x_task = x[idx_tensor]                              # (N_task, n_embd)
             y_task = torch.stack([y_list[i] for i in indices])  
             head = self.tasks[tname]
@@ -474,16 +357,6 @@ class HRGPT(nn.Module):
 
     @torch.no_grad()
     def predict(self, x: torch.Tensor, task_name: str):
-        """
-        x: [B, T] token ids
-        task_name: which task head to use (must exist in self.tasks / self.config.tasks)
-
-        Returns:
-        For classification (binary/multiclass):
-            {"pred": LongTensor[B], "probs": FloatTensor[B, C], "logits": FloatTensor[B, C]}
-        For regression:
-            {"pred": FloatTensor[B], "value": FloatTensor[B], "raw": FloatTensor[B, 1]}
-        """
         self.eval()
         device = x.device
         b, t = x.size()
@@ -491,7 +364,7 @@ class HRGPT(nn.Module):
         spec = self.config.tasks[task_name]
         assert t <= self.block_size, f"seq len {t} > block_size {self.block_size}"
 
-        # ---- shared transformer forward (no mask, causal) ----
+        # shared transformer forward (no mask, causal)
         pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0)  # [1, T]
         tok_emb = self.transformer.wte(x)            # [B, T, D]
         pos_emb = self.transformer.wpe(pos)          # [1, T, D]

@@ -5,14 +5,13 @@ class MyTokenizer:
         # Use the fast tokenizer
         self.tokenizer = GPT2TokenizerFast.from_pretrained(pretrained_model_name)
 
-        # Keep GPT-2's original EOS; add BOS/PAD and any custom tokens.
+        # Keep GPT-2's original EOS
         special = {
             "bos_token": "<sost>",
-            'eos_token': '<eost>', 
             'pad_token': '<pad>', 
-            "additional_special_tokens": ["<ans>"],
         }
         self.tokenizer.add_special_tokens(special)
+        
         # Convenience IDs
         self.bos_id = self.tokenizer.bos_token_id
         self.eos_id = self.tokenizer.eos_token_id

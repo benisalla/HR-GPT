@@ -40,28 +40,28 @@ config.vocab_size = len(tokenizer.tokenizer)
 # Create dataloader
 loader = BatchLoader(config, "val", tokenizer, device="cpu")
 
-# print(f"Number of batches: {len(loader)}\n")
+print(f"Number of batches: {len(loader)}\n")
 
-# # Iterate and inspect
-# for batch_idx, (x_batch, x_mask, y_list, task_names) in enumerate(loader):
-#     print(f"--- Batch {batch_idx+1}/{len(loader)} ---")
-#     for i in range(x_batch.size(0)):
-#         ids = x_batch[i].tolist()
-#         mask = x_mask[i].tolist()
-#         # Decode ignoring pads
-#         decoded = tokenizer.decode([tid for tid, m in zip(ids, mask) if m == 1], skip_special_tokens=False)
-#         print(f" Sample {i+1}:")
-#         print(f"   input_ids: {ids}")
-#         print(f"   mask:      {mask}")
-#         print(f"   decoded:   {decoded}")
-#         print(f"   target y:  {y_list[i].item()}")
-#         print(f"   task:      {task_names[i]}")
-#     print()
+# Iterate and inspect
+for batch_idx, (x_batch, x_mask, y_list, task_names) in enumerate(loader):
+    print(f"--- Batch {batch_idx+1}/{len(loader)} ---")
+    for i in range(x_batch.size(0)):
+        ids = x_batch[i].tolist()
+        mask = x_mask[i].tolist()
+        # Decode ignoring pads
+        decoded = tokenizer.decode([tid for tid, m in zip(ids, mask) if m == 1], skip_special_tokens=False)
+        print(f" Sample {i+1}:")
+        print(f"   input_ids: {ids}")
+        print(f"   mask:      {mask}")
+        print(f"   decoded:   {decoded}")
+        print(f"   target y:  {y_list[i].item()}")
+        print(f"   task:      {task_names[i]}")
+    print()
 
 
-#     if batch_idx >= 2:
-#         print("Stopping after 3 batches for brevity.")
-#         break
+    if batch_idx >= 0:
+        print("Stopping after 3 batches for brevity.")
+        break
 
 
 print("Creating model...")
