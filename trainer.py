@@ -1,14 +1,6 @@
-"""
-Simple training loop; Boilerplate that could apply to any arbitrary neural network,
-so nothing in this file really has anything to do with GPT specifically.
-"""
-
 import time
 from collections import defaultdict
-
 import torch
-from torch.utils.data.dataloader import DataLoader
-from model.utils import CfgNode as CN
 
 class Trainer:
 

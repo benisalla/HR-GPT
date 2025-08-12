@@ -95,3 +95,27 @@ for batch_idx, (x_batch, x_mask, y_list, task_names) in enumerate(loader):
     if batch_idx >= 2:
         print("Stopping after 3 batches for brevity.")
         break
+
+
+model.eval()
+with torch.no_grad():
+    for batch_idx, (x_batch, x_mask, y_list, task_names) in enumerate(loader):
+        x_batch = x_batch.to(device)
+        x_mask  = x_mask.to(device)
+
+        print(f"\n--- Predict batch {batch_idx+1} ---")
+        for i in range(x_batch.size(0)):
+            task = task_names[i]
+            out  = model.predict(x_batch[i:i+1], task)
+
+            if config.tasks[task].task_type in ("binary", "multiclass"):
+                pred = out["pred"].item()
+                probs = out["probs"][0].tolist()
+                print(f" sample {i}: task={task} -> pred={pred}, probs={probs}")
+            else:
+                val = out["value"].item()
+                print(f" sample {i}: task={task} -> value={val}")
+
+        # keep it short
+        if batch_idx >= 2:
+            break

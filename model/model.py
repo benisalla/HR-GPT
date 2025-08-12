@@ -364,7 +364,7 @@ class HRGPT(nn.Module):
         spec = self.config.tasks[task_name]
         assert t <= self.block_size, f"seq len {t} > block_size {self.block_size}"
 
-        # shared transformer forward (no mask, causal)
+        # shared transformer
         pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0)  # [1, T]
         tok_emb = self.transformer.wte(x)            # [B, T, D]
         pos_emb = self.transformer.wpe(pos)          # [1, T, D]
@@ -374,11 +374,11 @@ class HRGPT(nn.Module):
         h = self.transformer.ln_f(h)                 # [B, T, D]
         h_last = h[:, -1, :]                         # [B, D]
 
-        # ---- task head ----
+        # task head
         head = self.tasks[task_name]
         logits = head(h_last)                        # [B, C] or [B, 1]
 
-        # ---- post-process per task type ----
+        # post-process per task type
         if spec.task_type in ("binary", "multiclass"):
             probs = F.softmax(logits, dim=-1)        # [B, C]  (binary C=2)
             pred = probs.argmax(dim=-1)              # [B]
