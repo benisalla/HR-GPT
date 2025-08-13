@@ -5,3 +5,4 @@ pandas
 pytest
 tensorboard
 gradio
+matplotlib

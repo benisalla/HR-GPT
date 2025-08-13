@@ -463,7 +463,7 @@ class HRGPT(nn.Module):
 
 # this class will help us in inference
 class HRGPTInterface:
-    def __init__(self, ckpt_path: Optional[str] = None, data_dir: str = "toy_data"):
+    def __init__(self, ckpt_path: Optional[str], data_dir: str = "toy_data"):
         self.data_dir = Path(data_dir)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -474,10 +474,9 @@ class HRGPTInterface:
         self.tr_config = TrainConfig()
         self.model = HRGPT(self.config, self.tr_config).to(self.device)
 
-        if ckpt_path and os.path.exists(ckpt_path):
-            self.model.load_trained_model(
-                ckpt_path=ckpt_path, device=self.device, strict_shapes=True, verbose=True
-            )
+        self.model.load_trained_model(
+            ckpt_path=ckpt_path, device=self.device, strict_shapes=True, verbose=True
+        )
 
         self.test_data = self._load_test_data()
 
