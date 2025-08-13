@@ -271,16 +271,6 @@ class Trainer:
                 pre_norm = pre["grad_norm"]
                 pre_max  = pre["grad_max_abs"]
 
-                # warn on spikes and write a flag
-                if pre_norm > 10.0:
-                    print(f"WARNING: High gradient norm: {pre_norm:.2f}")
-
-                # Safety: detect NaN/Inf
-                if not torch.isfinite(torch.tensor(pre_norm)):
-                    print("ERROR: Non-finite gradient norm detected; skipping step.")
-                    self.optimizer.zero_grad(set_to_none=True)
-                    continue
-
                 # Gradient clipping
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.tr_config.grad_norm_clip)
 
@@ -367,7 +357,7 @@ tr_config = TrainConfig(
     log_interval=100,
     eval_interval=500,
     device= "cuda" if torch.cuda.is_available() else "cpu",
-    amp=True,
+    amp=False, # stop using amp ( half precision training ) for now,
 )
 
 # Create tokenizer  
