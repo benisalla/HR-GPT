@@ -142,7 +142,7 @@ class RegressionHead(nn.Module):
         h = self.act(h)         
         h = self.drop(h)
         y = self.fc2(h)  
-        y = y * self.scale
+        y = y * self.scale.clamp(0.5, 2.0)
         return y  # [B, 1]
 
 def get_task_heads(cfg: GPTConfig) -> nn.ModuleDict:
@@ -231,6 +231,10 @@ class HRGPT(nn.Module):
             torch.nn.init.zeros_(module.bias)
             torch.nn.init.ones_(module.weight)
 
+        if isinstance(module, RegressionHead) and hasattr(module, "scale"):
+            with torch.no_grad():
+                module.scale.fill_(1.0)
+
     def get_pretrained_backbone(self):
         self_sd = self.state_dict()
         print("Loading pretrained GPT-2 backbone...")
@@ -277,7 +281,6 @@ class HRGPT(nn.Module):
             v_self = self_sd[k]
             try:
                 if any(k.endswith(suf) for suf in transposed):
-                    # transpose copy
                     if v_hf.shape[::-1] != v_self.shape:
                         raise AssertionError(f"shape {v_hf.shape} vs {v_self.shape}")
                     with torch.no_grad():
@@ -290,7 +293,7 @@ class HRGPT(nn.Module):
                 copied += 1
             except AssertionError as e:
                 skipped += 1
-                print(f"[skip] {k}: {e}")  # keep quiet or log if needed
+                print(f"[skip] {k}: {e}") 
 
         # load back into the module
         self.load_state_dict(self_sd, strict=False)
@@ -349,7 +352,7 @@ class HRGPT(nn.Module):
                     decay.add(fpn)
                 elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
                     no_decay.add(fpn)
-                elif pn == 'scale':  # Handle the scale parameter from RegressionHead
+                elif pn == 'scale': 
                     no_decay.add(fpn)
 
         # Validate Classification
@@ -403,11 +406,11 @@ class HRGPT(nn.Module):
                 loss = F.cross_entropy(logits, y_task, label_smoothing=self.tr_config.lbl_smoothing) * self.tr_config.cls_loss_scale
             elif spec.task_type == "regression":
                 # loss = F.mse_loss(
-                #     logits.squeeze(-1) / self.tr_config.reg_unit_value, 
+                #     logits.squeeze(-1), 
                 #     y_task / self.tr_config.reg_unit_value
                 #     ) * self.tr_config.reg_loss_scale
                 loss = F.smooth_l1_loss(
-                    logits.squeeze(-1) / self.tr_config.reg_unit_value,
+                    logits.squeeze(-1),
                     y_task / self.tr_config.reg_unit_value,
                     beta=1.0
                 ) * self.tr_config.reg_loss_scale
@@ -450,8 +453,8 @@ class HRGPT(nn.Module):
             return {"pred": pred, "probs": probs, "logits": logits}
 
         elif spec.task_type == "regression":
-            value_scaled = logits.squeeze(-1)                        # [B] in "thousands"
-            value = value_scaled * self.tr_config.reg_unit_value          # back to original units
+            value_scaled = logits.squeeze(-1) # in units of reg_unit_value             
+            value = value_scaled * self.tr_config.reg_unit_value  
             return {"pred": value, "value": value, "raw": logits}
         
         else:

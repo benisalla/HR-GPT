@@ -83,7 +83,6 @@ class Trainer:
                 task_losses[task].append(loss)
             num_batches += 1
 
-            # ---- compute metrics per task on this batch ----
             # group indices by task
             task_to_indices = defaultdict(list)
             for i, tname in enumerate(task_names):
@@ -224,17 +223,16 @@ class Trainer:
     def _print_eval_line(self, step: int, metrics: dict):
         base = f"[{step}] val_loss={metrics.get('val/total_loss', float('nan')):.4f}"
 
-        # choose at most 3 tasks to display
         task_names = list(self.model.config.tasks.keys())
         shown = []
-        for t in task_names[:3]:
+        for t in task_names[:4]:
             k, v = self._key_metric_for_task(t, metrics)
             if k and v is not None:
                 shown.append(f"{t}:{k.split('_')[-1]}={v:.4f}") 
 
         more = ""
-        if len(task_names) > 3:
-            more = f" (+{len(task_names) - 3} more)"
+        if len(task_names) > 4:
+            more = f" (+{len(task_names) - 4} more)"
 
         if shown:
             print(base + " | " + " | ".join(shown) + more)
@@ -353,7 +351,7 @@ tr_config = TrainConfig(
     learning_rate=3e-5,
     betas=(0.9, 0.95),
     weight_decay=0.1,
-    grad_norm_clip=5.0,
+    grad_norm_clip=2.0,
     log_interval=100,
     eval_interval=500,
     device= "cuda" if torch.cuda.is_available() else "cpu",
@@ -361,7 +359,7 @@ tr_config = TrainConfig(
 )
 
 # Create tokenizer  
-tokenizer = MyTokenizer("gpt2")
+tokenizer = MyTokenizer()
 ml_config.vocab_size = len(tokenizer.tokenizer)
 
 # Create model

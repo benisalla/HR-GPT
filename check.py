@@ -59,7 +59,7 @@ for batch_idx, (x_batch, x_mask, y_list, task_names) in enumerate(loader):
     print()
 
 
-    if batch_idx >= 0:
+    if batch_idx >= 3:
         print("Stopping after 3 batches for brevity.")
         break
 
