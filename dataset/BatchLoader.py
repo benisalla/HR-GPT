@@ -1,8 +1,8 @@
-import torch
 import json
-from torch.nn.utils.rnn import pad_sequence
-from itertools import groupby
+import torch
 from random import shuffle
+from itertools import groupby
+from torch.nn.utils.rnn import pad_sequence
 from dataset.utils import ORDERED_ATTRS, _pretty_attr
 
 class BatchLoader(object):
