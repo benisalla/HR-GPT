@@ -126,22 +126,22 @@ class TrainConfig:
     max_iters: Optional[int] = 10_000  
 
     # Optimizer
-    learning_rate: float = 3e-4
+    learning_rate: float = 1e-4
     betas: Tuple[float, float] = (0.9, 0.95)
     weight_decay: float = 0.1
     grad_norm_clip: float = 1.0
     lbl_smoothing: float = 0.05
 
     # Logging & eval
-    log_interval: int = 100          # steps
-    eval_interval: int = 1000         # steps
+    log_interval: int = 100        # steps
+    eval_interval: int = 1000      # steps
     save_chpts_every : int = 1000  # steps
     log_dir: str = "logs"
     experiment_name: str = "hr_gpt_training"
     checkpoint_dir: str = "checkpoints"   
 
     # scaling 
-    reg_loss_scale: float = 1.0 / 10_000
+    reg_loss_scale: float = 1.0
     cls_loss_scale: float = 1.0
     reg_unit_value: float = 1_000.0 # after training 1 => 1_000 ( unit value )
 

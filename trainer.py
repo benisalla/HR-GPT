@@ -139,6 +139,35 @@ class Trainer:
         self.model.train()
         return val_metrics
 
+    def _grad_stats(self):
+        """Return global grad stats and (name, l2_norm) per-parameter."""
+        total_sq = 0.0
+        max_abs = 0.0
+        per_param = []
+        for name, p in self.model.named_parameters():
+            if p.grad is None:
+                continue
+            g = p.grad.detach()
+            # l2 norm of this tensor
+            n = g.norm(2).item()
+            total_sq += n * n
+            max_abs = max(max_abs, g.abs().max().item())
+            per_param.append((name, n))
+        total_l2 = total_sq ** 0.5
+        return {"grad_norm": total_l2, "grad_max_abs": max_abs}, per_param
+
+    def _log_grad_histograms(self, step, every=1000, topk=20):
+        """Log histograms for the top-k largest-norm params every `every` steps."""
+        if step % every != 0:
+            return
+        # rank by current grad l2 norm to limit noise/size
+        stats, per_param = self._grad_stats()
+        per_param.sort(key=lambda x: x[1], reverse=True)
+        for name, _ in per_param[:topk]:
+            p = dict(self.model.named_parameters())[name]
+            if p.grad is not None:
+                self.writer.add_histogram(f"grads/{name}", p.grad, step)
+
     def log_metrics(self, metrics, step, tag: str):
         """Log everything to TensorBoard; print a short, organized line to console."""
         # TensorBoard (full)
@@ -235,22 +264,55 @@ class Trainer:
                     avg_loss, task_losses = self.model(x_batch, x_mask, y_list, task_names)
                 self.optimizer.zero_grad(set_to_none=True)
                 scaler.scale(avg_loss).backward()
-                scaler.unscale_(self.optimizer)
+                scaler.unscale_(self.optimizer) # we have to make sure gradients are in their real scale
+
+                # Get gradient statistics
+                pre, _ = self._grad_stats()
+                pre_norm = pre["grad_norm"]
+                pre_max  = pre["grad_max_abs"]
+
+                # warn on spikes and write a flag
+                if pre_norm > 10.0:
+                    print(f"WARNING: High gradient norm: {pre_norm:.2f}")
+
+                # Safety: detect NaN/Inf
+                if not torch.isfinite(torch.tensor(pre_norm)):
+                    print("ERROR: Non-finite gradient norm detected; skipping step.")
+                    self.optimizer.zero_grad(set_to_none=True)
+                    continue
+
+                # Gradient clipping
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.tr_config.grad_norm_clip)
+
+                # post gradient clipping stats
+                post, _ = self._grad_stats()
+                post_norm = post["grad_norm"]
+                post_max  = post["grad_max_abs"]
+
+                # step optimizer ( change w and b )
                 scaler.step(self.optimizer)
                 scaler.update()
 
                 # Logging
                 if self.iter_num % self.tr_config.log_interval == 0:
                     metrics = {
-                        'train/total_loss': avg_loss.item(),
-                        'train/learning_rate': self.optimizer.param_groups[0]['lr'],
+                        "train/total_loss": avg_loss.item(),
+                        "train/learning_rate": self.optimizer.param_groups[0]["lr"],
+                        "train/grad_norm_pre": pre_norm,
+                        "train/grad_max_abs_pre": pre_max,
+                        "train/grad_norm_post": post_norm,
+                        "train/grad_max_abs_post": post_max,
+                        "train/grad_clipped": float(post_norm < pre_norm),  
                     }
                     
                     # task losses
                     for task, loss in task_losses.items():
                         metrics[f'train/{task}_loss'] = loss
                     
+                    # distribution of gradient values
+                    self._log_grad_histograms(self.iter_num, every=max(1000, self.tr_config.log_interval * 5), topk=20)
+
+                    # Log to TensorBoard
                     self.log_metrics(metrics, self.iter_num, tag="train")
 
                 # Evaluation
@@ -298,10 +360,10 @@ tr_config = TrainConfig(
     num_workers=4,
     batch_size=64,
     max_iters=1_00_000,
-    learning_rate=2e-4,
+    learning_rate=3e-5,
     betas=(0.9, 0.95),
     weight_decay=0.1,
-    grad_norm_clip=2.0,
+    grad_norm_clip=5.0,
     log_interval=100,
     eval_interval=500,
     device= "cuda" if torch.cuda.is_available() else "cpu",
