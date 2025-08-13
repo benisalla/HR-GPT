@@ -21,3 +21,9 @@ python ./trainer.py
 source .venv/Scripts/activate
 tensorboard --logdir=logs --reload_interval=5 --port=6006
 ```
+
+# run the app
+```bash
+source .venv/Scripts/activate
+
+```

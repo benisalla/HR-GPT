@@ -25,7 +25,7 @@ TASKS = {
         task_type="binary",
         n_classes=2,
         mult_fact=4,
-        dropout=0.2,
+        dropout=0.5,
     ),
 
     "JobLevel": TaskSpec(
@@ -33,7 +33,7 @@ TASKS = {
         task_type="multiclass",
         n_classes=5,
         mult_fact=4,
-        dropout=0.2,
+        dropout=0.5,
     ),
 
     "MonthlyIncome": TaskSpec(
@@ -48,7 +48,7 @@ TASKS = {
         task_type="multiclass",
         n_classes=4,
         mult_fact=4,
-        dropout=0.2,
+        dropout=0.5,
     ),
 }
 
@@ -124,6 +124,7 @@ class TrainConfig:
     betas: Tuple[float, float] = (0.9, 0.95)
     weight_decay: float = 0.1
     grad_norm_clip: float = 1.0
+    lbl_smoothing: float = 0.05
 
     # Logging & eval
     log_interval: int = 100          # steps
@@ -134,8 +135,9 @@ class TrainConfig:
     checkpoint_dir: str = "checkpoints"   
 
     # scaling 
-    reg_loss_scale: float = 1.0/1e6
+    reg_loss_scale: float = 1.0 / 10_000
     cls_loss_scale: float = 1.0
+    reg_unit_value: float = 1_000.0 # after training 1 => 1_000 ( unit value )
 
     # materials config
     device: str = "cpu"         

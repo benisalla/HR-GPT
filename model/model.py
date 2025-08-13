@@ -1,5 +1,10 @@
+import json
 import math
 import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+from dataset.tokenizer import MyTokenizer
+from dataset.utils import ORDERED_ATTRS, _pretty_attr
 import torch
 import torch.nn as nn
 from model.config import GPTConfig, TrainConfig
@@ -383,9 +388,15 @@ class HRGPT(nn.Module):
 
             spec = self.config.tasks[tname]
             if spec.task_type in ("binary", "multiclass"):
-                loss = F.cross_entropy(logits, y_task) * tr_config.cls_loss_scale
+                loss = F.cross_entropy(logits, y_task, label_smoothing=tr_config.lbl_smoothing) * tr_config.cls_loss_scale
             elif spec.task_type == "regression":
-                loss = F.mse_loss(logits.squeeze(-1), y_task) * tr_config.reg_loss_scale
+                # loss = F.mse_loss(logits.squeeze(-1) / tr_config.reg_unit_value, y_task / tr_config.reg_unit_value)
+                loss = F.smooth_l1_loss(
+                    logits.squeeze(-1) / tr_config.reg_unit_value,
+                    y_task / tr_config.reg_unit_value,
+                    beta=1.0  
+                )
+
             else:
                 raise ValueError(f"Unknown task type {spec.task_type}")
 
@@ -430,3 +441,225 @@ class HRGPT(nn.Module):
 
         else:
             raise ValueError(f"Unknown task_type: {spec.task_type}")
+        
+
+# this class will help us in inference
+class HRGPTInterface:
+    def __init__(self, model_path: Optional[str] = None, data_dir: str = "toy_data"):
+        """Initialize the HR-GPT interface"""
+        self.data_dir = Path(data_dir)
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        # Load configuration and model
+        self.config = GPTConfig().validate()
+        self.tokenizer = MyTokenizer()
+        self.config.vocab_size = self.tokenizer.vocab_size
+        
+        # Initialize model
+        self.model = HRGPT(self.config).to(self.device)
+        
+        # Load pretrained weights if provided
+        if model_path and os.path.exists(model_path):
+            self._load_model_weights(model_path)
+        
+        # Load test data for selection
+        self.test_data = self._load_test_data()
+        
+        # Define class mappings for display
+        self.class_mappings = {
+            "Attrition": {0: "No (Staying)", 1: "Yes (Leaving)"},
+            "JobLevel": {0: "Level 1", 1: "Level 2", 2: "Level 3", 3: "Level 4", 4: "Level 5"},
+            "JobSatisfaction": {0: "Low", 1: "Medium", 2: "High", 3: "Very High"}
+        }
+        
+        # Define input field configurations
+        self.input_fields = self._get_input_fields()
+    
+    def _load_model_weights(self, model_path: str):
+        """Load pretrained model weights"""
+        try:
+            checkpoint = torch.load(model_path, map_location=self.device)
+            if "model" in checkpoint:
+                self.model.load_state_dict(checkpoint["model"])
+            else:
+                self.model.load_state_dict(checkpoint)
+            print(f"✅ Loaded model weights from {model_path}")
+        except Exception as e:
+            print(f"⚠️ Could not load model weights: {e}")
+    
+    def _load_test_data(self) -> List[Dict]:
+        """Load test data for selection"""
+        test_file = self.data_dir / "test.json"
+        if test_file.exists():
+            with open(test_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return []
+    
+    def _get_input_fields(self) -> Dict[str, Dict]:
+        """Define input field configurations"""
+        return {
+            "Age": {"type": "number", "label": "Age", "value": 30, "minimum": 18, "maximum": 70},
+            "BusinessTravel": {"type": "dropdown", "label": "Business Travel", 
+                             "choices": ["non-travel", "travel_rarely", "travel_frequently"], "value": "travel_rarely"},
+            "DailyRate": {"type": "number", "label": "Daily Rate ($)", "value": 800, "minimum": 100, "maximum": 2000},
+            "Department": {"type": "dropdown", "label": "Department",
+                         "choices": ["sales", "research & development", "human resources"], "value": "research & development"},
+            "DistanceFromHome": {"type": "number", "label": "Distance from Home (km)", "value": 10, "minimum": 1, "maximum": 50},
+            "Education": {"type": "dropdown", "label": "Education Level",
+                        "choices": ["Below College", "College", "Bachelor", "Master", "Doctor"], "value": "Bachelor"},
+            "EducationField": {"type": "dropdown", "label": "Education Field",
+                             "choices": ["life sciences", "medical", "marketing", "technical degree", "other", "human resources"], 
+                             "value": "life sciences"},
+            "EnvironmentSatisfaction": {"type": "dropdown", "label": "Environment Satisfaction",
+                                      "choices": ["Low", "Medium", "High", "Very High"], "value": "High"},
+            "Gender": {"type": "dropdown", "label": "Gender", "choices": ["male", "female"], "value": "male"},
+            "HourlyRate": {"type": "number", "label": "Hourly Rate ($)", "value": 50, "minimum": 20, "maximum": 100},
+            "JobInvolvement": {"type": "dropdown", "label": "Job Involvement",
+                             "choices": ["Low", "Medium", "High", "Very High"], "value": "High"},
+            "JobRole": {"type": "dropdown", "label": "Job Role",
+                      "choices": ["sales executive", "research scientist", "laboratory technician", 
+                               "manufacturing director", "healthcare representative", "manager", 
+                               "sales representative", "research director", "human resources"], 
+                      "value": "research scientist"},
+            "MaritalStatus": {"type": "dropdown", "label": "Marital Status",
+                            "choices": ["single", "married", "divorced"], "value": "married"},
+            "MonthlyRate": {"type": "number", "label": "Monthly Rate ($)", "value": 15000, "minimum": 2000, "maximum": 30000},
+            "NumCompaniesWorked": {"type": "number", "label": "Number of Companies Worked", "value": 2, "minimum": 0, "maximum": 10},
+            "OverTime": {"type": "dropdown", "label": "Works Overtime", "choices": ["no", "yes"], "value": "no"},
+            "PercentSalaryHike": {"type": "number", "label": "Percent Salary Hike (%)", "value": 15, "minimum": 10, "maximum": 25},
+            "PerformanceRating": {"type": "dropdown", "label": "Performance Rating",
+                                "choices": ["Low", "Good", "Excellent", "Outstanding"], "value": "Excellent"},
+            "RelationshipSatisfaction": {"type": "dropdown", "label": "Relationship Satisfaction",
+                                       "choices": ["Low", "Medium", "High", "Very High"], "value": "High"},
+            "StockOptionLevel": {"type": "number", "label": "Stock Option Level", "value": 1, "minimum": 0, "maximum": 3},
+            "TotalWorkingYears": {"type": "number", "label": "Total Working Years", "value": 8, "minimum": 0, "maximum": 40},
+            "TrainingTimesLastYear": {"type": "number", "label": "Training Times Last Year", "value": 3, "minimum": 0, "maximum": 10},
+            "WorkLifeBalance": {"type": "dropdown", "label": "Work-Life Balance",
+                              "choices": ["Bad", "Good", "Better", "Best"], "value": "Better"},
+            "YearsAtCompany": {"type": "number", "label": "Years at Company", "value": 5, "minimum": 0, "maximum": 40},
+            "YearsInCurrentRole": {"type": "number", "label": "Years in Current Role", "value": 3, "minimum": 0, "maximum": 20},
+            "YearsSinceLastPromotion": {"type": "number", "label": "Years Since Last Promotion", "value": 1, "minimum": 0, "maximum": 15},
+            "YearsWithCurrManager": {"type": "number", "label": "Years with Current Manager", "value": 2, "minimum": 0, "maximum": 15}
+        }
+    
+    def _convert_input_to_model_format(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert UI inputs to model format"""
+        converted = inputs.copy()
+        
+        # Convert categorical values to lowercase and handle special cases
+        categorical_mappings = {
+            "Education": {"Below College": 0, "College": 1, "Bachelor": 2, "Master": 3, "Doctor": 4},
+            "EnvironmentSatisfaction": {"Low": 0, "Medium": 1, "High": 2, "Very High": 3},
+            "JobInvolvement": {"Low": 0, "Medium": 1, "High": 2, "Very High": 3},
+            "PerformanceRating": {"Low": 0, "Good": 1, "Excellent": 2, "Outstanding": 3},
+            "RelationshipSatisfaction": {"Low": 0, "Medium": 1, "High": 2, "Very High": 3},
+            "WorkLifeBalance": {"Bad": 0, "Good": 1, "Better": 2, "Best": 3}
+        }
+        
+        for field, value in converted.items():
+            if field in categorical_mappings:
+                converted[field] = categorical_mappings[field][value]
+            elif isinstance(value, str):
+                converted[field] = value.lower()
+        
+        return converted
+    
+    def _record_to_text(self, inputs: Dict[str, Any], target_col: str) -> str:
+        """Convert record to text format for model input"""
+        parts = []
+        for attr in ORDERED_ATTRS:
+            if attr == target_col or attr not in inputs:
+                continue
+            parts.append(_pretty_attr(attr, inputs[attr]))
+        
+        body = ", ".join([p for p in parts if p])
+        return f"The employee {body}."
+    
+    def predict_task(self, task_name: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Make prediction for a specific task"""
+        try:
+            # Convert inputs to model format
+            model_inputs = self._convert_input_to_model_format(inputs)
+            
+            # Get task specification
+            task_spec = self.config.tasks[task_name]
+            
+            # Convert to text and tokenize
+            text = self._record_to_text(model_inputs, task_spec.target_col)
+            token_ids = self.tokenizer.encode(text)
+            
+            # Convert to tensor and predict
+            x = torch.tensor([token_ids], dtype=torch.long, device=self.device)
+            
+            with torch.no_grad():
+                self.model.eval()
+                result = self.model.predict(x, task_name)
+            
+            # Format output based on task type
+            if task_spec.task_type in ("binary", "multiclass"):
+                pred_idx = result["pred"].item()
+                probs = result["probs"][0].cpu().numpy()
+                
+                # Get class name for display
+                if task_name in self.class_mappings:
+                    pred_class = self.class_mappings[task_name][pred_idx]
+                    class_probs = {self.class_mappings[task_name][i]: float(prob) 
+                                 for i, prob in enumerate(probs)}
+                else:
+                    pred_class = f"Class {pred_idx}"
+                    class_probs = {f"Class {i}": float(prob) for i, prob in enumerate(probs)}
+                
+                return {
+                    "task": task_name,
+                    "prediction": pred_class,
+                    "confidence": float(probs[pred_idx]),
+                    "all_probabilities": class_probs,
+                    "raw_prediction": pred_idx
+                }
+            
+            else:  # regression
+                value = result["value"].item()
+                return {
+                    "task": task_name,
+                    "prediction": f"${value:,.2f}" if task_name == "MonthlyIncome" else f"{value:.2f}",
+                    "raw_value": float(value)
+                }
+                
+        except Exception as e:
+            return {"error": f"Prediction failed: {str(e)}"}
+    
+    def load_test_sample(self, sample_idx: int) -> Tuple[Dict[str, Any], str]:
+        """Load a sample from test data"""
+        if not self.test_data or sample_idx >= len(self.test_data):
+            return {}, "No test data available"
+        
+        sample = self.test_data[sample_idx]
+        info = f"Loaded test sample {sample_idx + 1}/{len(self.test_data)}"
+        
+        # Convert sample to UI format
+        ui_inputs = {}
+        for field, config in self.input_fields.items():
+            if field in sample:
+                value = sample[field]
+                if config["type"] == "dropdown" and isinstance(value, (int, float)):
+                    # Convert numeric values back to display format
+                    if field == "Education":
+                        choices = ["Below College", "College", "Bachelor", "Master", "Doctor"]
+                        ui_inputs[field] = choices[int(value)] if 0 <= int(value) < len(choices) else choices[0]
+                    elif field in ["EnvironmentSatisfaction", "JobInvolvement", "RelationshipSatisfaction"]:
+                        choices = ["Low", "Medium", "High", "Very High"]
+                        ui_inputs[field] = choices[int(value)] if 0 <= int(value) < len(choices) else choices[0]
+                    elif field == "PerformanceRating":
+                        choices = ["Low", "Good", "Excellent", "Outstanding"]
+                        ui_inputs[field] = choices[int(value)] if 0 <= int(value) < len(choices) else choices[0]
+                    elif field == "WorkLifeBalance":
+                        choices = ["Bad", "Good", "Better", "Best"]
+                        ui_inputs[field] = choices[int(value)] if 0 <= int(value) < len(choices) else choices[0]
+                    else:
+                        ui_inputs[field] = value
+                else:
+                    ui_inputs[field] = value
+            else:
+                ui_inputs[field] = config.get("value", "")
+        
+        return ui_inputs, info

@@ -4,3 +4,4 @@ transformers
 pandas
 pytest
 tensorboard
+gradio

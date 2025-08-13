@@ -17,6 +17,10 @@ class MyTokenizer:
         self.eos_id = self.tokenizer.eos_token_id
         self.pad_id = self.tokenizer.pad_token_id
 
+        # vocab size 
+        # self.vocab_size = self.tokenizer.vocab_size + len(special)
+        self.vocab_size = len(self.tokenizer)
+
     def encode(self, text: str, add_bos: bool = True, add_eos: bool = True, **kwargs):
         ids = self.tokenizer.encode(text, add_special_tokens=False, **kwargs)
         if add_bos and self.bos_id is not None:
