@@ -170,12 +170,13 @@ def get_task_heads(cfg: GPTConfig) -> nn.ModuleDict:
 
 class HRGPT(nn.Module):
     """Our Humain Resources GPT Model"""
-    def __init__(self, config):
+    def __init__(self, config: GPTConfig, tr_config: TrainConfig):
         super().__init__()
         assert config.vocab_size is not None
         assert config.block_size is not None
         self.block_size = config.block_size
         self.config = config
+        self.tr_config = tr_config
 
         # transformer core
         self.transformer = nn.ModuleDict(dict(
@@ -193,10 +194,6 @@ class HRGPT(nn.Module):
         print("applying initial weights ...")
         # init all weights
         self.apply(self.__init_weights__)
-
-        print("Initializing from pretrained GPT-2 weights...")
-        # init model
-        self.__init_from_pretrained__()
 
         print("displaying model stats...")
         # display stats of the model and his head
@@ -234,55 +231,73 @@ class HRGPT(nn.Module):
             torch.nn.init.zeros_(module.bias)
             torch.nn.init.ones_(module.weight)
 
-    def __init_from_pretrained__(self):
-        # our params
-        sd = self.state_dict()
-
-        # load HF GPT-2
-        print("Loading pretrained GPT-2 model...")
+    def get_pretrained_backbone(self):
+        self_sd = self.state_dict()
+        print("Loading pretrained GPT-2 backbone...")
         hf = GPT2LMHeadModel.from_pretrained("gpt2")
-        print(f"Pretrained model loaded with {sum(p.numel() for p in hf.parameters()) / 1e6:.2f}M parameters.")
-        sd_hf = hf.state_dict()
+        hf_sd = hf.state_dict()
 
-        # copy ONLY transformer weights 
-        hf_keys = [k for k in sd_hf.keys() if k.startswith("transformer.")]
+        # token embeddings ( a bit trichy here :) )
+        wte_hf = hf_sd["transformer.wte.weight"]                       # [50257, D]
+        wte_self = self_sd["transformer.wte.weight"]                   # [new_vocab, D]
+        old_vocab, new_vocab = wte_hf.shape[0], wte_self.shape[0]
+
+        with torch.no_grad():
+            if new_vocab >= old_vocab:
+                wte_self[:old_vocab].copy_(wte_hf)
+                if new_vocab > old_vocab:
+                    avg = wte_hf.mean(dim=0, keepdim=True)             # [1, D]
+                    wte_self[old_vocab:new_vocab].copy_(avg.expand(new_vocab - old_vocab, -1))
+            else:
+                wte_self.copy_(wte_hf[:new_vocab])
+
+        # the same for block size ( position embeddings or encodings :) )
+        if "transformer.wpe.weight" in self_sd and "transformer.wpe.weight" in hf_sd:
+            if self_sd["transformer.wpe.weight"].shape == hf_sd["transformer.wpe.weight"].shape:
+                self_sd["transformer.wpe.weight"].copy_(hf_sd["transformer.wpe.weight"])
+
+        # copy the rest of the transformer weights
         transposed = (
             "attn.c_attn.weight",
             "attn.c_proj.weight",
             "mlp.c_fc.weight",
             "mlp.c_proj.weight",
         )
-
         copied, skipped = 0, 0
-        for k in hf_keys:
-            if k not in sd:
-                skipped += 1
-                print(f"[skip] missing in SELF: {k}")
+        for k, v_hf in hf_sd.items():
+            # this condition to skip heads ( task heads i added )
+            if not k.startswith("transformer."):              
                 continue
-
-            v_hf, v_self = sd_hf[k], sd[k]
+            if k == "transformer.wte.weight" or k == "transformer.wpe.weight":
+                copied += 1
+                continue
+            if k not in self_sd:
+                skipped += 1
+                continue
+            v_self = self_sd[k]
             try:
                 if any(k.endswith(suf) for suf in transposed):
-                    assert v_hf.shape[::-1] == v_self.shape, f"Shape mismatch for {k}: {v_hf.shape} vs {v_self.shape}"
+                    # transpose copy
+                    if v_hf.shape[::-1] != v_self.shape:
+                        raise AssertionError(f"shape {v_hf.shape} vs {v_self.shape}")
                     with torch.no_grad():
                         v_self.copy_(v_hf.t())
                 else:
-                    assert v_hf.shape == v_self.shape, f"Shape mismatch for {k}: {v_hf.shape} vs {v_self.shape}"
+                    if v_hf.shape != v_self.shape:
+                        raise AssertionError(f"shape {v_hf.shape} vs {v_self.shape}")
                     with torch.no_grad():
                         v_self.copy_(v_hf)
                 copied += 1
             except AssertionError as e:
                 skipped += 1
-                print(f"[skip] {e}")
+                print(f"[skip] {k}: {e}")  # keep quiet or log if needed
 
-        # init our task heads (custom) — keep your original intent
-        for _, task_head in self.tasks.items():
-            if isinstance(task_head, nn.Module):
-                task_head.apply(self.__init_weights__)
+        # load back into the module
+        self.load_state_dict(self_sd, strict=False)
+        print(f"Backbone copy done. Copied {copied}, skipped {skipped}. Old vocab={old_vocab}, New vocab={new_vocab} (new rows init as avg).")
 
-        # load back into self (non-transformer keys remain as-initialized)
-        self.load_state_dict(sd, strict=False)
-        print(f"Copied {copied} transformer tensors from GPT-2, skipped {skipped}.")
+
+
 
     def load_weights(
         self,
@@ -321,7 +336,7 @@ class HRGPT(nn.Module):
                 print(f"[load_weights] unexpected keys: {len(info['unexpected'])} (e.g., {info['unexpected'][:5]})")
         return info
 
-    def get_optimizer(self, tr_config: TrainConfig) -> torch.optim.Optimizer:
+    def get_optimizer(self) -> torch.optim.Optimizer:
         decay = set()
         no_decay = set()
         whitelist_weight_modules = (torch.nn.Linear,)
@@ -349,13 +364,13 @@ class HRGPT(nn.Module):
 
         # Create the optimizer with separate weight decay for different parameter groups
         optim_groups = [
-            {"params": [param_dict[pn] for pn in decay], "weight_decay": tr_config.weight_decay},
+            {"params": [param_dict[pn] for pn in decay], "weight_decay": self.tr_config.weight_decay},
             {"params": [param_dict[pn] for pn in no_decay], "weight_decay": 0.0},
         ]
-        optimizer = torch.optim.AdamW(optim_groups, lr=tr_config.learning_rate, betas=tr_config.betas)
+        optimizer = torch.optim.AdamW(optim_groups, lr=self.tr_config.learning_rate, betas=self.tr_config.betas)
         return optimizer
 
-    def forward(self, x_batch, x_mask, y_list, task_names, tr_config: TrainConfig):
+    def forward(self, x_batch, x_mask, y_list, task_names):
         B, T = x_batch.size()
         device = x_batch.device
         assert T <= self.block_size, f"T={T} > block_size={self.block_size}"
@@ -388,14 +403,14 @@ class HRGPT(nn.Module):
 
             spec = self.config.tasks[tname]
             if spec.task_type in ("binary", "multiclass"):
-                loss = F.cross_entropy(logits, y_task, label_smoothing=tr_config.lbl_smoothing) * tr_config.cls_loss_scale
+                loss = F.cross_entropy(logits, y_task, label_smoothing=self.tr_config.lbl_smoothing) * self.tr_config.cls_loss_scale
             elif spec.task_type == "regression":
-                # loss = F.mse_loss(logits.squeeze(-1) / tr_config.reg_unit_value, y_task / tr_config.reg_unit_value)
+                # loss = F.mse_loss(logits.squeeze(-1) / self.tr_config.reg_unit_value, y_task / self.tr_config.reg_unit_value)
                 loss = F.smooth_l1_loss(
-                    logits.squeeze(-1) / tr_config.reg_unit_value,
-                    y_task / tr_config.reg_unit_value,
+                    logits.squeeze(-1) / self.tr_config.reg_unit_value,
+                    y_task / self.tr_config.reg_unit_value,
                     beta=1.0  
-                )
+                ) * self.tr_config.reg_loss_scale
 
             else:
                 raise ValueError(f"Unknown task type {spec.task_type}")
@@ -436,9 +451,10 @@ class HRGPT(nn.Module):
             return {"pred": pred, "probs": probs, "logits": logits}
 
         elif spec.task_type == "regression":
-            value = logits.squeeze(-1)               # [B]
+            value_scaled = logits.squeeze(-1)                        # [B] in "thousands"
+            value = value_scaled * self.tr_config.reg_unit_value          # back to original units
             return {"pred": value, "value": value, "raw": logits}
-
+        
         else:
             raise ValueError(f"Unknown task_type: {spec.task_type}")
         

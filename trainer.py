@@ -15,7 +15,7 @@ class Trainer:
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.optimizer = model.get_optimizer(self.tr_config)
+        self.optimizer = model.get_optimizer()
         self.callbacks = defaultdict(list)
         self.device = self.tr_config.device
         
@@ -77,7 +77,7 @@ class Trainer:
             y_list  = [y.to(self.device) for y in y_list]
 
             # compute loss (model already groups by task internally)
-            avg_loss, batch_task_losses = self.model(x_batch, x_mask, y_list, task_names, self.tr_config)
+            avg_loss, batch_task_losses = self.model(x_batch, x_mask, y_list, task_names)
             total_loss += avg_loss.item()
             for task, loss in batch_task_losses.items():
                 task_losses[task].append(loss)
@@ -232,7 +232,7 @@ class Trainer:
                 # Forward -> Backprop and update parameters
                 scaler = torch.cuda.amp.GradScaler(enabled=self.tr_config.amp and self.device.startswith("cuda"))
                 with torch.cuda.amp.autocast(enabled=self.tr_config.amp and self.device.startswith("cuda")):
-                    avg_loss, task_losses = self.model(x_batch, x_mask, y_list, task_names, self.tr_config)
+                    avg_loss, task_losses = self.model(x_batch, x_mask, y_list, task_names)
                 self.optimizer.zero_grad(set_to_none=True)
                 scaler.scale(avg_loss).backward()
                 scaler.unscale_(self.optimizer)
@@ -313,7 +313,10 @@ tokenizer = MyTokenizer("gpt2")
 ml_config.vocab_size = len(tokenizer.tokenizer)
 
 # Create model
-model = HRGPT(ml_config)
+model = HRGPT(ml_config, tr_config)
+
+# Load pretrained weights if available
+model.get_pretrained_backbone()
 
 # Create datasets
 train_loader = BatchLoader(ml_config, "train", tokenizer, device=tr_config.device)

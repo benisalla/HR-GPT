@@ -1,6 +1,12 @@
 from dataclasses import dataclass, asdict, field
 from typing import Dict, Optional, Any, Tuple
 
+# spetial tokens 
+SPECIAL_TOKENS = {
+    "bos_token": "<sost>",
+    'pad_token': '<pad>', 
+}
+
 
 # Task
 @dataclass

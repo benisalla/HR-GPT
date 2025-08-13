@@ -1,3 +1,4 @@
+from model.config import SPECIAL_TOKENS
 from transformers import GPT2TokenizerFast
 
 class MyTokenizer:
@@ -6,11 +7,7 @@ class MyTokenizer:
         self.tokenizer = GPT2TokenizerFast.from_pretrained(pretrained_model_name)
 
         # Keep GPT-2's original EOS
-        special = {
-            "bos_token": "<sost>",
-            'pad_token': '<pad>', 
-        }
-        self.tokenizer.add_special_tokens(special)
+        self.tokenizer.add_special_tokens(SPECIAL_TOKENS)
         
         # Convenience IDs
         self.bos_id = self.tokenizer.bos_token_id
