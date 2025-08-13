@@ -1,4 +1,5 @@
 import math
+import os
 import torch
 import torch.nn as nn
 from model.config import GPTConfig, TrainConfig
@@ -277,6 +278,43 @@ class HRGPT(nn.Module):
         # load back into self (non-transformer keys remain as-initialized)
         self.load_state_dict(sd, strict=False)
         print(f"Copied {copied} transformer tensors from GPT-2, skipped {skipped}.")
+
+    def load_weights(
+        self,
+        ckpt_path: str,
+        device: str | torch.device | None = None,
+        strict_shapes: bool = True,
+        verbose: bool = True,
+    ):
+        assert os.path.isfile(ckpt_path), f"Checkpoint not found: {ckpt_path}"
+        map_loc = device if device is not None else "cpu"
+        blob = torch.load(ckpt_path, map_location=map_loc)
+
+        state = blob.get("model", blob)  # support raw state_dict or Trainer checkpoint
+        current = self.state_dict()
+
+        if strict_shapes:
+            # filter out any key with mismatched shape
+            filtered = {k: v for k, v in state.items() if (k in current and current[k].shape == v.shape)}
+        else:
+            filtered = {k: v for k, v in state.items() if k in current}
+
+        # actually load
+        incompatible = self.load_state_dict(filtered, strict=False)
+        loaded_keys = list(filtered.keys())
+
+        info = {
+            "missing": list(incompatible.missing_keys),
+            "unexpected": list(incompatible.unexpected_keys),
+            "loaded": loaded_keys,
+        }
+        if verbose:
+            print(f"[load_weights] loaded {len(loaded_keys)} tensors from {ckpt_path}")
+            if info["missing"]:
+                print(f"[load_weights] missing keys: {len(info['missing'])} (e.g., {info['missing'][:5]})")
+            if info["unexpected"]:
+                print(f"[load_weights] unexpected keys: {len(info['unexpected'])} (e.g., {info['unexpected'][:5]})")
+        return info
 
     def get_optimizer(self, tr_config: TrainConfig) -> torch.optim.Optimizer:
         decay = set()
