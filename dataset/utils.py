@@ -1,3 +1,6 @@
+from typing import Dict, Any, List
+from copy import deepcopy
+
 # drop constants/IDs
 COMMON_DROP = ["EmployeeNumber", "EmployeeCount", "Over18", "StandardHours"]
 
@@ -173,4 +176,70 @@ def _pretty_attr(attr: str, val) -> str:
 
     return f"{attr} is {val_s}"
 
+ATTRIBUTE_INPUT_FIELDS: Dict[str, Dict[str, Any]] = {
+    "Age": {"type": "number", "label": "Age", "value": 30, "minimum": 18, "maximum": 70},
+    "BusinessTravel": {"type": "dropdown", "label": "Business Travel", 
+                        "choices": ["non-travel", "travel_rarely", "travel_frequently"], "value": "travel_rarely"},
+    "DailyRate": {"type": "number", "label": "Daily Rate ($)", "value": 800, "minimum": 100, "maximum": 2000},
+    "Department": {"type": "dropdown", "label": "Department",
+                    "choices": ["sales", "research & development", "human resources"], "value": "research & development"},
+    "DistanceFromHome": {"type": "number", "label": "Distance from Home (km)", "value": 10, "minimum": 1, "maximum": 50},
+    "Education": {"type": "dropdown", "label": "Education Level",
+                "choices": ["Below College", "College", "Bachelor", "Master", "Doctor"], "value": "Bachelor"},
+    "EducationField": {"type": "dropdown", "label": "Education Field",
+                        "choices": ["life sciences", "medical", "marketing", "technical degree", "other", "human resources"], 
+                        "value": "life sciences"},
+    "EnvironmentSatisfaction": {"type": "dropdown", "label": "Environment Satisfaction",
+                                "choices": ["Low", "Medium", "High", "Very High"], "value": "High"},
+    "Gender": {"type": "dropdown", "label": "Gender", "choices": ["male", "female"], "value": "male"},
+    "HourlyRate": {"type": "number", "label": "Hourly Rate ($)", "value": 50, "minimum": 20, "maximum": 100},
+    "JobInvolvement": {"type": "dropdown", "label": "Job Involvement",
+                        "choices": ["Low", "Medium", "High", "Very High"], "value": "High"},
+    "JobRole": {"type": "dropdown", "label": "Job Role",
+                "choices": ["sales executive", "research scientist", "laboratory technician", 
+                        "manufacturing director", "healthcare representative", "manager", 
+                        "sales representative", "research director", "human resources"], 
+                "value": "research scientist"},
+    "MaritalStatus": {"type": "dropdown", "label": "Marital Status",
+                    "choices": ["single", "married", "divorced"], "value": "married"},
+    "MonthlyRate": {"type": "number", "label": "Monthly Rate ($)", "value": 15000, "minimum": 2000, "maximum": 30000},
+    "NumCompaniesWorked": {"type": "number", "label": "Number of Companies Worked", "value": 2, "minimum": 0, "maximum": 10},
+    "OverTime": {"type": "dropdown", "label": "Works Overtime", "choices": ["no", "yes"], "value": "no"},
+    "PercentSalaryHike": {"type": "number", "label": "Percent Salary Hike (%)", "value": 15, "minimum": 10, "maximum": 25},
+    "PerformanceRating": {"type": "dropdown", "label": "Performance Rating",
+                        "choices": ["Low", "Good", "Excellent", "Outstanding"], "value": "Excellent"},
+    "RelationshipSatisfaction": {"type": "dropdown", "label": "Relationship Satisfaction",
+                                "choices": ["Low", "Medium", "High", "Very High"], "value": "High"},
+    "StockOptionLevel": {"type": "number", "label": "Stock Option Level", "value": 1, "minimum": 0, "maximum": 3},
+    "TotalWorkingYears": {"type": "number", "label": "Total Working Years", "value": 8, "minimum": 0, "maximum": 40},
+    "TrainingTimesLastYear": {"type": "number", "label": "Training Times Last Year", "value": 3, "minimum": 0, "maximum": 10},
+    "WorkLifeBalance": {"type": "dropdown", "label": "Work-Life Balance",
+                        "choices": ["Bad", "Good", "Better", "Best"], "value": "Better"},
+    "YearsAtCompany": {"type": "number", "label": "Years at Company", "value": 5, "minimum": 0, "maximum": 40},
+    "YearsInCurrentRole": {"type": "number", "label": "Years in Current Role", "value": 3, "minimum": 0, "maximum": 20},
+    "YearsSinceLastPromotion": {"type": "number", "label": "Years Since Last Promotion", "value": 1, "minimum": 0, "maximum": 15},
+    "YearsWithCurrManager": {"type": "number", "label": "Years with Current Manager", "value": 2, "minimum": 0, "maximum": 15}
+}
 
+ENCODE_AS_INT: List[str] = [
+    "Education",
+    "EnvironmentSatisfaction",
+    "JobInvolvement",
+    "PerformanceRating",
+    "RelationshipSatisfaction",
+    "WorkLifeBalance",
+]
+
+ATTRIBUTE_CATEGORICAL_ENCODINGS: Dict[str, Dict[str, int]] = {
+    field: {label: idx for idx, label in enumerate(ATTRIBUTE_INPUT_FIELDS[field]["choices"])}
+    for field in ENCODE_AS_INT
+}
+
+CLASS_MAPPINGS: Dict[str, Dict[int, str]] = {
+    "Attrition": {0: "No (Staying)", 1: "Yes (Leaving)"},
+    "JobLevel": {0: "Level 1", 1: "Level 2", 2: "Level 3", 3: "Level 4", 4: "Level 5"},
+    "JobSatisfaction": {0: "Low", 1: "Medium", 2: "High", 3: "Very High"},
+}
+
+def get_attribute_input_fields() -> Dict[str, Dict[str, Any]]:
+    return deepcopy(ATTRIBUTE_INPUT_FIELDS)
