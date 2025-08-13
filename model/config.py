@@ -46,7 +46,7 @@ TASKS = {
         target_col="MonthlyIncome",
         task_type="regression",
         mult_fact=4,
-        dropout=0.2,
+        dropout=0.3,
     ),
 
     "JobSatisfaction": TaskSpec(
@@ -141,8 +141,8 @@ class TrainConfig:
     checkpoint_dir: str = "checkpoints"   
 
     # scaling 
-    reg_loss_scale: float = 1.0
-    cls_loss_scale: float = 1.0
+    reg_loss_scale: float = 10.0
+    cls_loss_scale: float = 0.1
     reg_unit_value: float = 1_000.0 # after training 1 => 1_000 ( unit value )
 
     # materials config

@@ -402,16 +402,15 @@ class HRGPT(nn.Module):
             if spec.task_type in ("binary", "multiclass"):
                 loss = F.cross_entropy(logits, y_task, label_smoothing=self.tr_config.lbl_smoothing) * self.tr_config.cls_loss_scale
             elif spec.task_type == "regression":
-                loss = F.mse_loss(
-                    logits.squeeze(-1) / self.tr_config.reg_unit_value, 
-                    y_task / self.tr_config.reg_unit_value
-                    ) * self.tr_config.reg_loss_scale
-                # loss = F.smooth_l1_loss(
-                #     logits.squeeze(-1) / self.tr_config.reg_unit_value,
-                #     y_task / self.tr_config.reg_unit_value,
-                #     beta=1.0  
-                # ) * self.tr_config.reg_loss_scale
-
+                # loss = F.mse_loss(
+                #     logits.squeeze(-1) / self.tr_config.reg_unit_value, 
+                #     y_task / self.tr_config.reg_unit_value
+                #     ) * self.tr_config.reg_loss_scale
+                loss = F.smooth_l1_loss(
+                    logits.squeeze(-1) / self.tr_config.reg_unit_value,
+                    y_task / self.tr_config.reg_unit_value,
+                    beta=1.0
+                ) * self.tr_config.reg_loss_scale
             else:
                 raise ValueError(f"Unknown task type {spec.task_type}")
 
