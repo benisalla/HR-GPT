@@ -6,7 +6,6 @@ import torch.nn.functional as F
 from model.config import GPTConfig, TrainConfig
 from model.model import HRGPT, ClassificationHead, RegressionHead, Block, CausalSelfAttention, FeedForward, LayerNorm
 
-
 @pytest.fixture()
 def tiny_cfg():
     return GPTConfig().validate()
@@ -228,13 +227,23 @@ def test_regression_head_shapes():
     assert output.shape == (7, 1)
 
 def test_regression_head_scale_clamping():
-    head = RegressionHead(d_model=8, mult_fact=2, dropout=0.0, bias=True)
-    with torch.no_grad():
-        head.scale.fill_(5.0)
+    torch.manual_seed(0)
+    head = RegressionHead(d_model=8, mult_fact=2, dropout=0.0, bias=True).eval()
+
     x = torch.randn(3, 8)
-    output = head(x)
-    assert output.shape == (3, 1)
-    assert torch.all(torch.abs(head.scale) <= 2.0)
+
+    with torch.no_grad():
+        head.scale.fill_(1.0)
+        y_ref = head(x)  
+        assert y_ref.shape == (3, 1)
+
+        head.scale.fill_(5.0)
+        y_hi = head(x)
+        assert torch.allclose(y_hi, y_ref * 2.0, rtol=1e-5, atol=1e-6)
+
+        head.scale.fill_(0.1)
+        y_lo = head(x)
+        assert torch.allclose(y_lo, y_ref * 0.5, rtol=1e-5, atol=1e-6)
 
 def test_gelu_activation():
     from model.model import GELU

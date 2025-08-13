@@ -3,7 +3,7 @@ import time
 import torch
 from collections import defaultdict
 from torch.utils.tensorboard import SummaryWriter
-from model.config import GPTConfig, TrainConfig
+from model.config import DatasetConfig, GPTConfig, TrainConfig
 from model.model import HRGPT
 from dataset.tokenizer import MyTokenizer
 from dataset.BatchLoader import BatchLoader
@@ -343,10 +343,15 @@ class Trainer:
 # let's run the training process
 
 # Setup ml_config
+dt_config = DatasetConfig(
+    data_dir = "toy_data",
+    toks_in_batch = 1000,
+    batch_size = 16,
+    data_stats_path = "data_stats.json",
+)
 ml_config = GPTConfig()
 tr_config = TrainConfig(
     num_workers=4,
-    batch_size=64,
     max_iters=1_00_000,
     learning_rate=3e-4,
     betas=(0.9, 0.95),

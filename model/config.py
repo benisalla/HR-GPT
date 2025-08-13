@@ -117,7 +117,6 @@ class GPTConfig:
 class TrainConfig:
     # Dataloader / runtime
     num_workers: int = 4
-    batch_size: int = 16
 
     # Training length
     max_iters: Optional[int] = 10_000  
