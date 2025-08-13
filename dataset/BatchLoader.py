@@ -57,7 +57,6 @@ class BatchLoader(object):
             parts.append(_pretty_attr(attr, inputs[attr]))
         # remove empties and join nicely
         body = ", ".join([p for p in parts if p])
-        # small style tweak: clauses read better after "The employee"
         return f"The employee {body}."
 
     def create_batches(self):

@@ -312,7 +312,7 @@ class HRGPT(nn.Module):
         optimizer = torch.optim.AdamW(optim_groups, lr=tr_config.learning_rate, betas=tr_config.betas)
         return optimizer
 
-    def forward(self, x_batch, x_mask, y_list, task_names):
+    def forward(self, x_batch, x_mask, y_list, task_names, tr_config: TrainConfig):
         B, T = x_batch.size()
         device = x_batch.device
         assert T <= self.block_size, f"T={T} > block_size={self.block_size}"
@@ -345,9 +345,9 @@ class HRGPT(nn.Module):
 
             spec = self.config.tasks[tname]
             if spec.task_type in ("binary", "multiclass"):
-                loss = F.cross_entropy(logits, y_task)
+                loss = F.cross_entropy(logits, y_task) * tr_config.cls_loss_scale
             elif spec.task_type == "regression":
-                loss = F.mse_loss(logits.squeeze(-1), y_task)
+                loss = F.mse_loss(logits.squeeze(-1), y_task) * tr_config.reg_loss_scale
             else:
                 raise ValueError(f"Unknown task type {spec.task_type}")
 

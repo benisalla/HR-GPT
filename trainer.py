@@ -77,7 +77,7 @@ class Trainer:
             y_list  = [y.to(self.device) for y in y_list]
 
             # compute loss (model already groups by task internally)
-            avg_loss, batch_task_losses = self.model(x_batch, x_mask, y_list, task_names)
+            avg_loss, batch_task_losses = self.model(x_batch, x_mask, y_list, task_names, self.tr_config)
             total_loss += avg_loss.item()
             for task, loss in batch_task_losses.items():
                 task_losses[task].append(loss)
@@ -232,7 +232,7 @@ class Trainer:
                 # Forward -> Backprop and update parameters
                 scaler = torch.cuda.amp.GradScaler(enabled=self.tr_config.amp and self.device.startswith("cuda"))
                 with torch.cuda.amp.autocast(enabled=self.tr_config.amp and self.device.startswith("cuda")):
-                    avg_loss, task_losses = self.model(x_batch, x_mask, y_list, task_names)
+                    avg_loss, task_losses = self.model(x_batch, x_mask, y_list, task_names, self.tr_config)
                 self.optimizer.zero_grad(set_to_none=True)
                 scaler.scale(avg_loss).backward()
                 scaler.unscale_(self.optimizer)

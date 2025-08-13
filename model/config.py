@@ -133,6 +133,10 @@ class TrainConfig:
     experiment_name: str = "hr_gpt_training"
     checkpoint_dir: str = "checkpoints"   
 
+    # scaling 
+    reg_loss_scale: float = 1.0/1e6
+    cls_loss_scale: float = 1.0
+
     # materials config
     device: str = "cpu"         
     amp: bool = True            
