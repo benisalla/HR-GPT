@@ -15,8 +15,10 @@ class MyTokenizer:
         self.pad_id = self.tokenizer.pad_token_id
 
         # vocab size 
-        # self.vocab_size = self.tokenizer.vocab_size + len(special)
-        self.vocab_size = len(self.tokenizer)
+        self.vocab_size = self.tokenizer.vocab_size + len(SPECIAL_TOKENS)
+
+        # info
+        print(f"Tokenizer initialized with vocab size: {self.vocab_size}")
 
     def encode(self, text: str, add_bos: bool = True, add_eos: bool = True, **kwargs):
         ids = self.tokenizer.encode(text, add_special_tokens=False, **kwargs)

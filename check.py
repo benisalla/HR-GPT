@@ -2,7 +2,7 @@ import os
 from dataset.tokenizer import MyTokenizer
 from dataset.BatchLoader import BatchLoader
 from dataclasses import dataclass
-from model.config import GPTConfig, DatasetConfig
+from model.config import GPTConfig, DatasetConfig, TrainConfig
 from model.model import HRGPT
 import torch
 
@@ -67,7 +67,8 @@ for batch_idx, (x_batch, x_mask, y_list, task_names) in enumerate(loader):
 print("Creating model...")
 
 # Create model
-model = HRGPT(config).to(device)
+tr_config = TrainConfig()
+model = HRGPT(config, tr_config).to(device)
 model.eval()  # for testing
 print("Model initialized.\n")
 
