@@ -1,37 +1,32 @@
-# Python cache
+# Python
 __pycache__/
 *.py[cod]
-*.pyo
-
-# Jupyter checkpoints
-.ipynb_checkpoints/
-
-# Swap and temp files
-*.swp
-*.tmp
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
 
 # Virtual environments
 .venv/
-env/
 venv/
-logs/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data (downloaded by hr-train / prepare_data) and training outputs
+data/
 checkpoints/
-
-# OS-specific files
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-
-# Large data directories
-raw_data/
-toy_data/
-
-# Model checkpoints and outputs
+logs/
+hr-gpt/
 *.pt
 *.pth
 *.ckpt
+*.log
 
-# Configs that should remain local
-.pylintrc
+# OS / editors
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+.vscode/
+.idea/
