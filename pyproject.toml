@@ -9,6 +9,16 @@ description = "GPT-2 fine-tuned on employee records: predicts attrition, job lev
 readme = "README.md"
 authors = [{ name = "Ismail Ben Alla", email = "ismailbenalla52@gmail.com" }]
 requires-python = ">=3.10"
+keywords = [
+  "gpt-2", "transformer", "pytorch", "fine-tuning", "multi-task-learning", "nlp",
+  "hr-analytics", "employee-attrition", "tabular-data", "gradio",
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Education",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
   "torch>=2.2",
   "transformers>=4.49",
@@ -16,6 +26,11 @@ dependencies = [
   "numpy>=1.24",
   "scikit-learn>=1.3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/benisalla/HR-GPT"
+Documentation = "https://github.com/benisalla/HR-GPT/tree/main/docs"
+Issues = "https://github.com/benisalla/HR-GPT/issues"
 
 [project.optional-dependencies]
 app = ["gradio>=4.44"]
