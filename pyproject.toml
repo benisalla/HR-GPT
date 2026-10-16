@@ -7,7 +7,6 @@ name = "hr-gpt"
 version = "0.2.0"
 description = "GPT-2 fine-tuned on employee records: predicts attrition, job level, job satisfaction and monthly income."
 readme = "README.md"
-license = { text = "MIT" }
 authors = [{ name = "Ismail Ben Alla", email = "ismailbenalla52@gmail.com" }]
 requires-python = ">=3.10"
 dependencies = [
