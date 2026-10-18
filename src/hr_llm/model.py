@@ -1,4 +1,4 @@
-"""HR-GPT: a GPT-2 style Transformer that reads an employee sentence and feeds 4 task heads.
+"""HR-LLM: a GPT-2 style Transformer that reads an employee sentence and feeds 4 task heads.
 
     "The employee is 41 years old, ..." <eos>
         -> token + position embeddings
@@ -16,7 +16,7 @@ import torch
 from torch import Tensor, nn
 from torch.nn import functional as F
 
-from hr_gpt.config import CLASSIFICATION, PRETRAINED, ModelConfig, TaskSpec
+from hr_llm.config import CLASSIFICATION, PRETRAINED, ModelConfig, TaskSpec
 
 INIT_STD = 0.02  # GPT-2 initialisation
 
@@ -87,7 +87,7 @@ class TaskHead(nn.Module):
         return self.net(x)
 
 
-class HRGPT(nn.Module):
+class HRLLM(nn.Module):
     def __init__(self, config: ModelConfig, tasks: dict[str, TaskSpec]):
         super().__init__()
         self.config = config.validate()
@@ -212,7 +212,7 @@ def config_for_pretrained(name: str, base: ModelConfig) -> ModelConfig:
 
 
 @torch.no_grad()
-def load_pretrained_backbone(model: HRGPT, name: str) -> int:
+def load_pretrained_backbone(model: HRLLM, name: str) -> int:
     """Copy GPT-2 / DistilGPT-2 weights into the backbone. Returns the number of tensors copied.
 
     Hugging Face stores the attention/MLP matrices as Conv1D ([in, out]); ours are
@@ -253,12 +253,12 @@ def load_pretrained_backbone(model: HRGPT, name: str) -> int:
 
 def build_model(
     config: ModelConfig, tasks: dict[str, TaskSpec], load_weights: bool = True
-) -> HRGPT:
+) -> HRLLM:
     """Create the model; with config.init = gpt2/distilgpt2, size and (optionally) weights come from it."""
     config = config.validate()
     if config.init in PRETRAINED:
         config = config_for_pretrained(config.init, config)
-    model = HRGPT(config, tasks)
+    model = HRLLM(config, tasks)
     if load_weights and config.init in PRETRAINED:
         load_pretrained_backbone(model, config.init)
     return model

@@ -87,7 +87,7 @@ took over 30 minutes for one epoch. If you run out of memory, lower `--batch-siz
 | `--output-dir` | `checkpoints/run` | where checkpoints go |
 
 Task settings (classes, loss weights, class balancing, log target) are in
-`TASKS` in `src/hr_gpt/config.py`.
+`TASKS` in `src/hr_llm/config.py`.
 
 ## Things to try
 

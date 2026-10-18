@@ -45,14 +45,14 @@ income in dollars), plus the true value for test rows.
 }
 ```
 
-The allowed values for each column are in `src/hr_gpt/features.py`. A wrong value
+The allowed values for each column are in `src/hr_llm/features.py`. A wrong value
 gives a clear error, e.g. `'Gender' must be one of: Male, Female (got 'M')`.
 
 ## Python
 
 ```python
-from hr_gpt.features import default_record
-from hr_gpt.predict import Predictor
+from hr_llm.features import default_record
+from hr_llm.predict import Predictor
 
 predictor = Predictor.from_checkpoint("checkpoints/run/best.pt")
 employee = {**default_record(), "OverTime": "Yes", "YearsSinceLastPromotion": 8}

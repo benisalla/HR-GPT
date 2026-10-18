@@ -1,4 +1,4 @@
-# HR-GPT
+# HR-LLM
 
 **Describe an employee in plain words, get four HR predictions from one GPT-2.**
 
@@ -7,7 +7,7 @@
 [![Backbone: GPT-2](https://img.shields.io/badge/backbone-GPT--2-8A2BE2.svg)](https://huggingface.co/openai-community/gpt2)
 [![Data: IBM HR Attrition](https://img.shields.io/badge/data-IBM%20HR%20Attrition-orange.svg)](https://www.kaggle.com/datasets/pavansubhasht/ibm-hr-analytics-attrition-dataset)
 
-HR-GPT turns each employee record into an English sentence ("The employee is 41
+HR-LLM turns each employee record into an English sentence ("The employee is 41
 years old, works overtime, was last promoted 8 years ago, …") and fine-tunes
 GPT-2 to read it. Four small heads on the shared Transformer predict:
 
@@ -33,10 +33,10 @@ flowchart LR
 
 **No trained checkpoint is published yet.** Train one with
 [the notebook](notebooks/train_colab_kaggle.ipynb) on a free Kaggle or Colab GPU;
-it ends with HR-GPT's test results next to these baselines.
+it ends with HR-LLM's test results next to these baselines.
 
 The two baselines are already measured on the same 147 test employees, using the
-same 27 inputs. They are the bar HR-GPT has to clear:
+same 27 inputs. They are the bar HR-LLM has to clear:
 
 | Task | Metric | Linear model | Always the majority |
 |---|---|---:|---:|
@@ -53,7 +53,7 @@ Two things to know before reading any number:
   "stays" is ~84% accurate; the first version's 80.9% was below doing nothing. We report
   balanced accuracy and ROC-AUC.
 - **Job satisfaction is not predictable from these columns.** Even the linear model is
-  at chance, so expect HR-GPT to be near 25% balanced accuracy too. This is a property
+  at chance, so expect HR-LLM to be near 25% balanced accuracy too. This is a property
   of the data, not a bug.
 
 See [docs/results.md](docs/results.md).
@@ -131,7 +131,7 @@ hr-app --checkpoint checkpoints/run/best.pt
 ```
 
 **Recommended:** train on a free Kaggle or Colab GPU with
-[the notebook](notebooks/train_colab_kaggle.ipynb), download `hr-gpt-model.zip`, then run
+[the notebook](notebooks/train_colab_kaggle.ipynb), download `hr-llm-model.zip`, then run
 step 5 on your computer.
 
 ## The web app
@@ -154,7 +154,7 @@ predictions appear next to the true answers (✅ / ❌). Edit any field and clic
 ## Repository layout
 
 ```
-src/hr_gpt/          the package (read in this order)
+src/hr_llm/          the package (read in this order)
   features.py        the 27 input columns: UI widgets + the sentence each one becomes
   config.py          tasks, data, model and training settings
   data.py            download, stratified split, targets, tokenizer, dataset, collator

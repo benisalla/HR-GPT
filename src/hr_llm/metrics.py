@@ -12,7 +12,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from hr_gpt.config import CLASSIFICATION, TaskSpec
+from hr_llm.config import CLASSIFICATION, TaskSpec
 
 # The one number per task used in summaries ("higher is better" for all of them)
 HEADLINE = {CLASSIFICATION: "balanced_accuracy", "regression": "r2"}

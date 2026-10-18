@@ -11,10 +11,10 @@ import random
 from pathlib import Path
 from typing import Any
 
-from hr_gpt.config import CLASSIFICATION, DataConfig
-from hr_gpt.data import frame_to_records, load_split
-from hr_gpt.features import FEATURES, default_record, record_to_text
-from hr_gpt.predict import Predictor, actual_values
+from hr_llm.config import CLASSIFICATION, DataConfig
+from hr_llm.data import frame_to_records, load_split
+from hr_llm.features import FEATURES, default_record, record_to_text
+from hr_llm.predict import Predictor, actual_values
 
 TITLES = {
     "Attrition": "Will they leave?",
@@ -99,9 +99,9 @@ def build_app(predictor: Predictor, test_records: list[dict[str, Any]]):
             "Default employee. Edit any field, then Predict.",
         )
 
-    with gr.Blocks(title="HR-GPT") as demo:
+    with gr.Blocks(title="HR-LLM") as demo:
         gr.Markdown(
-            "# HR-GPT\n"
+            "# HR-LLM\n"
             "Describe an employee, get four predictions from one GPT-2 model: "
             "**attrition**, **job level**, **job satisfaction** and **monthly income**."
         )
@@ -164,7 +164,7 @@ def build_app(predictor: Predictor, test_records: list[dict[str, Any]]):
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Web app to try a trained HR-GPT model.")
+    parser = argparse.ArgumentParser(description="Web app to try a trained HR-LLM model.")
     parser.add_argument("--checkpoint", default="checkpoints/run/best.pt")
     parser.add_argument("--data-dir", type=Path, default=DataConfig().data_dir)
     parser.add_argument("--host", default="127.0.0.1")

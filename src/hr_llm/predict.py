@@ -1,7 +1,7 @@
 """Load a trained checkpoint and predict all four tasks for one or many employees.
 
 Python:
-    from hr_gpt.predict import Predictor
+    from hr_llm.predict import Predictor
     predictor = Predictor.from_checkpoint("checkpoints/run/best.pt")
     predictor.predict(record)              # one employee (dict of the 27 input columns)
 
@@ -18,8 +18,8 @@ from typing import Any
 import numpy as np
 import torch
 
-from hr_gpt.config import CLASSIFICATION, DataConfig, ModelConfig, TaskSpec, tasks_from_dict
-from hr_gpt.data import (
+from hr_llm.config import CLASSIFICATION, DataConfig, ModelConfig, TaskSpec, tasks_from_dict
+from hr_llm.data import (
     Collator,
     TargetEncoder,
     build_tokenizer,
@@ -27,8 +27,8 @@ from hr_gpt.data import (
     frame_to_records,
     load_split,
 )
-from hr_gpt.features import TARGET_COLUMNS, record_to_text, validate_record
-from hr_gpt.model import HRGPT
+from hr_llm.features import TARGET_COLUMNS, record_to_text, validate_record
+from hr_llm.model import HRLLM
 
 
 def pick_device(name: str = "auto") -> torch.device:
@@ -43,7 +43,7 @@ def pick_device(name: str = "auto") -> torch.device:
 
 @torch.no_grad()
 def run_model(
-    model: HRGPT,
+    model: HRLLM,
     ids: list[list[int]],
     pad_token_id: int,
     targets: TargetEncoder,
@@ -70,7 +70,7 @@ class Predictor:
     """A trained model + tokenizer + target scaling, ready for inference."""
 
     def __init__(
-        self, model: HRGPT, tokenizer, targets: TargetEncoder, max_tokens: int, info: dict
+        self, model: HRLLM, tokenizer, targets: TargetEncoder, max_tokens: int, info: dict
     ):
         self.model = model.eval()
         self.tokenizer = tokenizer
@@ -91,7 +91,7 @@ class Predictor:
             )
         ckpt = torch.load(path, map_location="cpu", weights_only=True)
         tasks = tasks_from_dict(ckpt["tasks"])
-        model = HRGPT(ModelConfig(**ckpt["model_config"]), tasks)
+        model = HRLLM(ModelConfig(**ckpt["model_config"]), tasks)
         model.load_state_dict(ckpt["model"])
         model.to(pick_device(device))
         tokenizer_dir = path.parent / ckpt["tokenizer_dir"]

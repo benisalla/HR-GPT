@@ -17,7 +17,7 @@ env/
 data/
 checkpoints/
 logs/
-hr-gpt/
+hr-llm/
 *.pt
 *.pth
 *.ckpt

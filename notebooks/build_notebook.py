@@ -1,8 +1,8 @@
 """Build notebooks/train_colab_kaggle.ipynb: a self-contained training notebook.
 
-The code cells are copied from src/hr_gpt/*.py at build time (module docstrings become
+The code cells are copied from src/hr_llm/*.py at build time (module docstrings become
 the markdown above each cell), so the notebook is identical to the package and needs no
-GitHub access. Regenerate after changing src/hr_gpt:
+GitHub access. Regenerate after changing src/hr_llm:
 
     python notebooks/build_notebook.py
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 import nbformat as nbf
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src" / "hr_gpt"
+SRC = ROOT / "src" / "hr_llm"
 OUT = ROOT / "notebooks" / "train_colab_kaggle.ipynb"
 
 SKIP = {"main", "build_parser"}  # command-line entry points are not needed in a notebook
@@ -29,7 +29,7 @@ def code(text: str) -> None:
 
 
 def module(name: str, skip: set[str] = SKIP) -> tuple[str, str]:
-    """(docstring, body) of src/hr_gpt/<name>.py without imports, CLI code and __main__."""
+    """(docstring, body) of src/hr_llm/<name>.py without imports, CLI code and __main__."""
     text = (SRC / f"{name}.py").read_text()
     lines = text.splitlines()
     tree = ast.parse(text)
@@ -51,7 +51,7 @@ def module(name: str, skip: set[str] = SKIP) -> tuple[str, str]:
 
 def module_cells(title: str, name: str, intro: str = "") -> None:
     doc, body = module(name)
-    md(f"{title}\n\n{intro}\n\n*Same code as `src/hr_gpt/{name}.py`.*\n\n" + _quote(doc))
+    md(f"{title}\n\n{intro}\n\n*Same code as `src/hr_llm/{name}.py`.*\n\n" + _quote(doc))
     code(body)
 
 
@@ -63,20 +63,20 @@ def _quote(doc: str) -> str:
 
 # ---------------------------------------------------------------------------
 md("""
-# HR-GPT — training notebook (Kaggle & Colab)
+# HR-LLM — training notebook (Kaggle & Colab)
 
 Fine-tune **GPT-2** to read an employee description and predict four things at once:
 **attrition** (will they leave?), **job level**, **job satisfaction** and **monthly income**.
 
 The notebook is **self-contained**: all the code is inside, identical to the
-[HR-GPT repo](https://github.com/benisalla/HR-GPT), with the same defaults. Upload it and
+[HR-LLM repo](https://github.com/benisalla/HR-LLM), with the same defaults. Upload it and
 press **Run all**.
 
 | | Kaggle | Colab |
 |---|---|---|
 | GPU | *Settings → Accelerator → GPU T4* | *Runtime → Change runtime type → T4 GPU* |
 | Internet | *Settings → Internet → On* (data + GPT-2 weights) | on by default |
-| Outputs kept in | `/kaggle/working/hr-gpt` (saved with "Save Version") | Google Drive if `USE_GOOGLE_DRIVE = True` |
+| Outputs kept in | `/kaggle/working/hr-llm` (saved with "Save Version") | Google Drive if `USE_GOOGLE_DRIVE = True` |
 
 It also runs on a CPU, but slowly: there, set `INIT = "distilgpt2"`.
 
@@ -151,14 +151,14 @@ INIT = "gpt2"  # "gpt2" (12 layers) | "distilgpt2" (6 layers, 2x faster) | "scra
 EPOCHS = 8
 
 if Path("/kaggle/working").exists():
-    BASE = Path("/kaggle/working/hr-gpt")
+    BASE = Path("/kaggle/working/hr-llm")
 elif USE_GOOGLE_DRIVE:
     from google.colab import drive
 
     drive.mount("/content/drive")
-    BASE = Path("/content/drive/MyDrive/hr-gpt")
+    BASE = Path("/content/drive/MyDrive/hr-llm")
 else:
-    BASE = Path("hr-gpt")
+    BASE = Path("hr-llm")
 
 data_config = DataConfig(data_dir=BASE / "data")
 model_config = ModelConfig(init=INIT)
@@ -356,7 +356,7 @@ md("""
 Zips `best.pt`, the tokenizer and the results. On your computer, with the repo installed:
 
 ```bash
-unzip hr-gpt-model.zip -d checkpoints/run
+unzip hr-llm-model.zip -d checkpoints/run
 hr-app --checkpoint checkpoints/run/best.pt
 ```
 """)
@@ -367,14 +367,14 @@ bundle.mkdir(parents=True)
 for name in [BEST_CHECKPOINT, "history.json", "test_results.json", "test_results.md"]:
     shutil.copy(train_config.output_dir / name, bundle / name)
 shutil.copytree(train_config.output_dir / TOKENIZER_DIR, bundle / TOKENIZER_DIR)
-archive = shutil.make_archive(str(BASE / "hr-gpt-model"), "zip", bundle)
+archive = shutil.make_archive(str(BASE / "hr-llm-model"), "zip", bundle)
 print("saved", archive, f"({Path(archive).stat().st_size / 1e6:.0f} MB)")
 try:
     from google.colab import files
 
     files.download(archive)
 except ImportError:
-    print("Kaggle: find it under Output -> hr-gpt/hr-gpt-model.zip")
+    print("Kaggle: find it under Output -> hr-llm/hr-llm-model.zip")
 """)
 
 nb = nbf.v4.new_notebook()

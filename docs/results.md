@@ -1,14 +1,14 @@
 # Results
 
-**No trained HR-GPT checkpoint is published yet.** Train it with
+**No trained HR-LLM checkpoint is published yet.** Train it with
 [the notebook](../notebooks/train_colab_kaggle.ipynb) on a free Kaggle or Colab GPU;
-its section 6 prints HR-GPT's test results next to the baselines below, and saves
+its section 6 prints HR-LLM's test results next to the baselines below, and saves
 them as `test_results.md`. Paste that table here.
 
 ## Baselines to beat (measured)
 
 Same test split (147 employees never used for training or model selection), same 27
-input columns as HR-GPT. Reproduce with `hr-evaluate` (it computes them every time).
+input columns as HR-LLM. Reproduce with `hr-evaluate` (it computes them every time).
 
 - **Linear:** logistic regression (class-balanced for attrition) / ridge regression on
   log(income), with one-hot categories and standardised numbers.
@@ -56,10 +56,10 @@ input columns as HR-GPT. Reproduce with `hr-evaluate` (it computes them every ti
   The first version of this repo reported 80.9% accuracy (on its own random split, where
   ~84% also stay), which is below doing nothing.
 - **JobSatisfaction is noise in this dataset.** The linear model is at chance
-  (21% balanced accuracy vs 25% for guessing). Expect HR-GPT to be there too; a much
+  (21% balanced accuracy vs 25% for guessing). Expect HR-LLM to be there too; a much
   higher number on 147 rows would more likely be luck than skill.
 - **JobLevel and MonthlyIncome are easy for a linear model** (76% accuracy, R² 0.83):
-  they follow experience and job role closely, so HR-GPT needs to match that first.
+  they follow experience and job role closely, so HR-LLM needs to match that first.
 - **147 test rows is small.** For attrition that is 24 leavers: one more or one fewer
   correct moves the leaver recall by about 4 points. Differences of a point or two
   between models are not meaningful; repeating training with several seeds is the next
@@ -68,8 +68,8 @@ input columns as HR-GPT. Reproduce with `hr-evaluate` (it computes them every ti
 ## Is a GPT worth it here?
 
 Honestly, for 1,470 rows of clean tabular data, a linear model or gradient boosting is
-the stronger, cheaper default, and HR-GPT may not beat the linear baseline. What the
+the stronger, cheaper default, and HR-LLM may not beat the linear baseline. What the
 project shows is the *technique* (serialising rows to text and fine-tuning a
 pretrained Transformer with several heads), which pays off when columns are many,
 messy or free-text, or when there is little labelled data for a new task. The
-baselines are here so that any claim about HR-GPT can be checked.
+baselines are here so that any claim about HR-LLM can be checked.

@@ -25,8 +25,8 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
-from hr_gpt.config import TASKS, DataConfig, ModelConfig, TaskSpec, TrainConfig, to_jsonable
-from hr_gpt.data import (
+from hr_llm.config import TASKS, DataConfig, ModelConfig, TaskSpec, TrainConfig, to_jsonable
+from hr_llm.data import (
     Collator,
     HRDataset,
     TargetEncoder,
@@ -34,9 +34,9 @@ from hr_gpt.data import (
     describe_columns,
     load_split,
 )
-from hr_gpt.metrics import headline, task_metrics
-from hr_gpt.model import HRGPT, build_model
-from hr_gpt.predict import pick_device, run_model
+from hr_llm.metrics import headline, task_metrics
+from hr_llm.model import HRLLM, build_model
+from hr_llm.predict import pick_device, run_model
 
 BEST_CHECKPOINT = "best.pt"
 LAST_CHECKPOINT = "last.pt"
@@ -69,7 +69,7 @@ def autocast_for(device: torch.device, precision: str):
 
 @torch.no_grad()
 def evaluate(
-    model: HRGPT,
+    model: HRLLM,
     dataset: HRDataset,
     targets: TargetEncoder,
     pad_token_id: int,
@@ -98,7 +98,7 @@ def evaluate(
     return total / max(1, n), metrics
 
 
-def save_checkpoint(path: Path, model: HRGPT, extra: dict[str, Any]) -> None:
+def save_checkpoint(path: Path, model: HRLLM, extra: dict[str, Any]) -> None:
     tmp = path.with_suffix(".tmp")
     torch.save({"model": model.state_dict(), **extra}, tmp)
     tmp.replace(path)  # never leave a half-written checkpoint
@@ -122,7 +122,7 @@ def train(
     train_config: TrainConfig,
     tasks: dict[str, TaskSpec] | None = None,
     tokenizer=None,
-    model: HRGPT | None = None,
+    model: HRLLM | None = None,
     on_epoch_end: Callable[[list[dict[str, Any]]], None] | None = None,
 ) -> dict[str, Any]:
     """Train and return a summary (best epoch, best val loss, history). `tokenizer`/`model`
@@ -249,7 +249,7 @@ def train(
 
 def build_parser() -> argparse.ArgumentParser:
     d, m, t = DataConfig(), ModelConfig(), TrainConfig()
-    p = argparse.ArgumentParser(description="Train HR-GPT on the IBM HR attrition data.")
+    p = argparse.ArgumentParser(description="Train HR-LLM on the IBM HR attrition data.")
     p.add_argument("--data-dir", type=Path, default=d.data_dir)
     p.add_argument("--output-dir", type=Path, default=t.output_dir)
     p.add_argument(

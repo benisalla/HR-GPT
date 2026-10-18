@@ -2,7 +2,7 @@
 
 import pytest
 
-from hr_gpt.app import results_table
+from hr_llm.app import results_table
 
 PRED = {
     "Attrition": {"label": "Leaves", "probabilities": {"Stays": 0.3, "Leaves": 0.7}},
@@ -28,12 +28,12 @@ def test_results_table_with_truth_marks_hits_and_misses():
 
 def test_app_builds_with_a_trained_checkpoint(tmp_path, data_config, tokenizer, tiny_model_config):
     gr = pytest.importorskip("gradio")
-    from hr_gpt.app import build_app
-    from hr_gpt.config import TASKS, TrainConfig
-    from hr_gpt.data import frame_to_records, load_split
-    from hr_gpt.model import HRGPT
-    from hr_gpt.predict import Predictor
-    from hr_gpt.train import train
+    from hr_llm.app import build_app
+    from hr_llm.config import TASKS, TrainConfig
+    from hr_llm.data import frame_to_records, load_split
+    from hr_llm.model import HRLLM
+    from hr_llm.predict import Predictor
+    from hr_llm.train import train
 
     cfg = TrainConfig(output_dir=tmp_path / "run", epochs=1, log_every=1000, device="cpu")
     train(
@@ -41,7 +41,7 @@ def test_app_builds_with_a_trained_checkpoint(tmp_path, data_config, tokenizer, 
         tiny_model_config,
         cfg,
         tokenizer=tokenizer,
-        model=HRGPT(tiny_model_config, TASKS),
+        model=HRLLM(tiny_model_config, TASKS),
     )
     predictor = Predictor.from_checkpoint(tmp_path / "run" / "best.pt", device="cpu")
     demo = build_app(predictor, frame_to_records(load_split(data_config, "test")))
