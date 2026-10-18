@@ -20,11 +20,11 @@ from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from hr_llm.config import CLASSIFICATION, TASKS, DataConfig, TaskSpec
-from hr_llm.data import frame_to_records, load_split
-from hr_llm.features import FEATURES
-from hr_llm.metrics import task_metrics
-from hr_llm.predict import Predictor
+from hr_jev.config import CLASSIFICATION, TASKS, DataConfig, TaskSpec
+from hr_jev.data import frame_to_records, load_split
+from hr_jev.features import FEATURES
+from hr_jev.metrics import task_metrics
+from hr_jev.predict import Predictor
 
 CATEGORICAL = [
     f.name for f in FEATURES if f.is_categorical and isinstance(next(iter(f.choices)), str)
@@ -77,7 +77,7 @@ def evaluate_checkpoint(
     for name, spec in tasks.items():
         y = true_values(spec, test)
         results[name] = {
-            "HR-LLM": task_metrics(spec, y, model_preds[name]),
+            "HR-Jev": task_metrics(spec, y, model_preds[name]),
             "linear": task_metrics(spec, y, linear_baseline(spec, train, test)),
             "trivial": task_metrics(spec, y, trivial_baseline(spec, train, test)),
         }
@@ -106,15 +106,15 @@ def to_markdown(results: dict[str, Any]) -> str:
             continue
         lines += [
             f"**{name}**\n",
-            "| metric | HR-LLM | linear baseline | trivial baseline |",
+            "| metric | HR-Jev | linear baseline | trivial baseline |",
             "|---|---:|---:|---:|",
         ]
         for key, label, fmt in ROWS[spec.kind]:
-            if key not in results[name]["HR-LLM"]:
+            if key not in results[name]["HR-Jev"]:
                 continue
             cells = [
                 fmt.format(results[name][m][key]) if key in results[name][m] else "-"
-                for m in ("HR-LLM", "linear", "trivial")
+                for m in ("HR-Jev", "linear", "trivial")
             ]
             lines.append(f"| {label} | " + " | ".join(cells) + " |")
         lines.append("")
@@ -122,7 +122,7 @@ def to_markdown(results: dict[str, Any]) -> str:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Evaluate HR-LLM on the test split vs baselines.")
+    parser = argparse.ArgumentParser(description="Evaluate HR-Jev on the test split vs baselines.")
     parser.add_argument("--checkpoint", default="checkpoints/run/best.pt")
     parser.add_argument("--data-dir", type=Path, default=DataConfig().data_dir)
     parser.add_argument("--split", default="test", choices=["val", "test"])

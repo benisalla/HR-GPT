@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from hr_llm.features import (
+from hr_jev.features import (
     FEATURES,
     FEATURES_BY_NAME,
     TARGET_COLUMNS,

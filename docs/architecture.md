@@ -1,4 +1,4 @@
-# How HR-LLM works
+# How HR-Jev works
 
 ## The idea
 
@@ -24,7 +24,7 @@ flowchart LR
 
 [IBM HR Analytics Employee Attrition & Performance](https://www.kaggle.com/datasets/pavansubhasht/ibm-hr-analytics-attrition-dataset)
 is a **fictional** dataset created by IBM data scientists: 1,470 employees, 35
-columns. `hr_llm.data.prepare_data` downloads it once
+columns. `hr_jev.data.prepare_data` downloads it once
 ([mirror in IBM's GitHub](https://github.com/IBM/employee-attrition-aif360), MD5
 checked), then:
 
@@ -37,7 +37,7 @@ checked), then:
 
 ### One schema for everything
 
-`src/hr_llm/features.py` lists the 27 input columns once: their label and tab in
+`src/hr_jev/features.py` lists the 27 input columns once: their label and tab in
 the web app, their allowed values or range, their default, and the phrase they
 become in the sentence. Training, evaluation, `hr-predict` and the web app all use
 it, so a record always turns into **exactly the same sentence**.
@@ -67,7 +67,7 @@ sentence, so one forward pass answers all four.
 
 ## Model
 
-`src/hr_llm/model.py` is a from-scratch GPT-2 (no Hugging Face model classes in
+`src/hr_jev/model.py` is a from-scratch GPT-2 (no Hugging Face model classes in
 the forward pass):
 
 - token + position embeddings, dropout

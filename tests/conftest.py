@@ -11,8 +11,8 @@ import pandas as pd
 import pytest
 from transformers import PreTrainedTokenizerFast
 
-from hr_llm.config import DataConfig, ModelConfig
-from hr_llm.features import DROPPED_COLUMNS, FEATURES, record_to_text
+from hr_jev.config import DataConfig, ModelConfig
+from hr_jev.features import DROPPED_COLUMNS, FEATURES, record_to_text
 
 EOS, PAD, UNK = "<|endoftext|>", "<|pad|>", "<unk>"
 

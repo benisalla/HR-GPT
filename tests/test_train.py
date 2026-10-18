@@ -6,13 +6,13 @@ import json
 import pytest
 import torch
 
-from hr_llm.config import TASKS, TrainConfig
-from hr_llm.data import frame_to_records, load_split
-from hr_llm.evaluate import evaluate_checkpoint, to_markdown
-from hr_llm.features import TARGET_COLUMNS
-from hr_llm.model import HRLLM
-from hr_llm.predict import Predictor, actual_values, format_prediction
-from hr_llm.train import lr_lambda, train
+from hr_jev.config import TASKS, TrainConfig
+from hr_jev.data import frame_to_records, load_split
+from hr_jev.evaluate import evaluate_checkpoint, to_markdown
+from hr_jev.features import TARGET_COLUMNS
+from hr_jev.model import HRJev
+from hr_jev.predict import Predictor, actual_values, format_prediction
+from hr_jev.train import lr_lambda, train
 
 
 def test_lr_schedule_warms_up_then_decays_to_zero():
@@ -42,7 +42,7 @@ def trained(tmp_path, data_config, tokenizer, tiny_model_config):
         log_every=1000,
         device="cpu",
     )
-    model = HRLLM(tiny_model_config, TASKS)
+    model = HRJev(tiny_model_config, TASKS)
     summary = train(data_config, tiny_model_config, config, tokenizer=tokenizer, model=model)
     return config.output_dir, summary
 
@@ -62,7 +62,7 @@ def test_embeddings_are_frozen_by_default(trained, tiny_model_config):
     out, _ = trained
     ckpt = torch.load(out / "best.pt", weights_only=True)
     torch.manual_seed(0)
-    fresh = HRLLM(tiny_model_config, TASKS)
+    fresh = HRJev(tiny_model_config, TASKS)
     torch.testing.assert_close(
         ckpt["model"]["transformer.wte.weight"], fresh.state_dict()["transformer.wte.weight"]
     )
@@ -93,7 +93,7 @@ def test_evaluation_compares_with_baselines(trained, data_config):
     out, _ = trained
     results = evaluate_checkpoint(out / "best.pt", data_config)
     for name in TASKS:
-        assert set(results[name]) == {"HR-LLM", "linear", "trivial"}
+        assert set(results[name]) == {"HR-Jev", "linear", "trivial"}
     assert results["Attrition"]["trivial"]["roc_auc"] == pytest.approx(0.5)
     table = to_markdown(results)
     assert "| ROC-AUC |" in table and "| R² |" in table

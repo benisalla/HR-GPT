@@ -4,15 +4,15 @@ import pytest
 import torch
 from transformers import GPT2Config, GPT2Model
 
-from hr_llm import model as model_module
-from hr_llm.config import TASKS, ModelConfig
-from hr_llm.model import HRLLM, build_model, load_pretrained_backbone
+from hr_jev import model as model_module
+from hr_jev.config import TASKS, ModelConfig
+from hr_jev.model import HRJev, build_model, load_pretrained_backbone
 
 
 @pytest.fixture()
 def model(tiny_model_config):
     torch.manual_seed(0)
-    return HRLLM(tiny_model_config, TASKS).eval()
+    return HRJev(tiny_model_config, TASKS).eval()
 
 
 def random_batch(vocab: int, lengths: list[int], pad: int):
@@ -83,7 +83,7 @@ def test_frozen_parameters_are_left_out_of_the_optimizer(model):
 
 def test_can_overfit_a_small_batch(tiny_model_config):
     torch.manual_seed(0)
-    m = HRLLM(tiny_model_config, TASKS)
+    m = HRJev(tiny_model_config, TASKS)
     ids, lengths = random_batch(tiny_model_config.vocab_size, [6, 8, 7, 5], pad=0)
     targets = {
         "Attrition": torch.tensor([0, 1, 0, 1]),
@@ -142,7 +142,7 @@ def test_gpt2_weights_give_the_same_hidden_states_as_hugging_face(monkeypatch):
         dropout=0.0,
         head_dropout=0.0,
     )
-    ours = HRLLM(ours_config, TASKS).eval()
+    ours = HRJev(ours_config, TASKS).eval()
     copied = load_pretrained_backbone(ours, "gpt2")
     assert copied == sum(1 for k in ours.state_dict() if k.startswith("transformer."))
 

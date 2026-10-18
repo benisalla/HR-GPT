@@ -19,8 +19,8 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-from hr_llm.config import CLASSIFICATION, DataConfig, TaskSpec
-from hr_llm.features import (
+from hr_jev.config import CLASSIFICATION, DataConfig, TaskSpec
+from hr_jev.features import (
     ALL_COLUMNS,
     DROPPED_COLUMNS,
     FEATURES,

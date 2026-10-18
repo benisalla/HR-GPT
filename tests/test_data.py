@@ -7,8 +7,8 @@ import pandas as pd
 import pytest
 import torch
 
-from hr_llm.config import TASKS
-from hr_llm.data import (
+from hr_jev.config import TASKS
+from hr_jev.data import (
     Collator,
     HRDataset,
     TargetEncoder,
@@ -19,7 +19,7 @@ from hr_llm.data import (
     prepare_data,
     stratified_split,
 )
-from hr_llm.features import ALL_COLUMNS, DROPPED_COLUMNS
+from hr_jev.features import ALL_COLUMNS, DROPPED_COLUMNS
 
 from .conftest import synthetic_rows
 

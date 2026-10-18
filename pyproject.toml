@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "hr-llm"
+name = "hr-jev"
 version = "0.2.0"
 description = "GPT-2 fine-tuned on employee records: predicts attrition, job level, job satisfaction and monthly income."
 readme = "README.md"
@@ -28,22 +28,22 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/benisalla/HR-LLM"
-Documentation = "https://github.com/benisalla/HR-LLM/tree/main/docs"
-Issues = "https://github.com/benisalla/HR-LLM/issues"
+Homepage = "https://github.com/benisalla/HR-Jev"
+Documentation = "https://github.com/benisalla/HR-Jev/tree/main/docs"
+Issues = "https://github.com/benisalla/HR-Jev/issues"
 
 [project.optional-dependencies]
 app = ["gradio>=4.44"]
 dev = ["pytest>=8", "ruff>=0.9", "nbformat>=5", "matplotlib>=3.7"]
 
 [project.scripts]
-hr-train = "hr_llm.train:main"
-hr-evaluate = "hr_llm.evaluate:main"
-hr-predict = "hr_llm.predict:main"
-hr-app = "hr_llm.app:main"
+hr-train = "hr_jev.train:main"
+hr-evaluate = "hr_jev.evaluate:main"
+hr-predict = "hr_jev.predict:main"
+hr-app = "hr_jev.app:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/hr_llm"]
+packages = ["src/hr_jev"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
