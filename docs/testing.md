@@ -56,6 +56,14 @@ By hand, in two minutes:
 | Empty a number field, then **Predict** | "⚠️ Cannot predict: missing value for …", nothing else changes |
 | Click **↺ Reset** | defaults come back |
 
-This was automated with [Playwright](https://playwright.dev/python/) during development
-(11 checks: the table above, plus no JavaScript errors and no horizontal scrolling at
-phone width). All 11 passed, run against a small checkpoint from the smoke test above.
+The same clicks are scripted in [`scripts/capture_demo.py`](../scripts/capture_demo.py),
+which also takes the screenshots and the GIF shown in the README:
+
+```bash
+pip install playwright && playwright install chromium ffmpeg   # once
+hr-app --checkpoint checkpoints/run/best.pt                    # terminal 1
+python scripts/capture_demo.py --out docs/images               # terminal 2
+```
+
+It loads the page, clicks **Random test employee**, opens both panels, switches
+**Works overtime** to Yes and predicts again, and reports any JavaScript error.

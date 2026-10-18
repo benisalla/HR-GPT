@@ -1,9 +1,39 @@
 # Results
 
-**No trained HR-Jev checkpoint is published yet.** Train it with
-[the notebook](../notebooks/train_colab_kaggle.ipynb) on a free Kaggle or Colab GPU;
-its section 6 prints HR-Jev's test results next to the baselines below, and saves
-them as `test_results.md`. Paste that table here.
+**Measured HR-Jev results** (`hr-train --init distilgpt2`, 8 epochs, 44 min on an 8-core
+laptop CPU) are in [examples/distilgpt2_report.md](examples/distilgpt2_report.md): training
+curves, the test tables below with the model's column filled in, confusion matrices, an
+income scatter plot and worked examples. Every test employee's inputs, truth and predictions
+are in [examples/distilgpt2_test_predictions.csv](examples/distilgpt2_test_predictions.csv).
+
+Summary on the 147 test employees:
+
+| Task | Metric | HR-Jev (DistilGPT-2) | linear | trivial |
+|---|---|---:|---:|---:|
+| Attrition | ROC-AUC | 0.737 | 0.853 | 0.500 |
+| Attrition | balanced accuracy | 65.7% | 75.3% | 50.0% |
+| JobLevel | accuracy | 66.0% | 76.2% | 33.3% |
+| JobSatisfaction | balanced accuracy | 22.1% | 21.3% | 25.0% |
+| MonthlyIncome | MAE | $1,491 | $1,388 | $3,672 |
+| MonthlyIncome | R² | 0.845 | 0.825 | −0.191 |
+
+The model beats the trivial baseline everywhere it can be beaten, beats the linear model on
+income (R², RMSE) and is behind it on attrition and job level. Job satisfaction is at
+chance for every model.
+
+To reproduce or to add a run (e.g. full GPT-2 on a Kaggle/Colab GPU with
+[the notebook](../notebooks/train_colab_kaggle.ipynb)):
+
+```bash
+hr-train --init distilgpt2 --output-dir checkpoints/distilgpt2       # or the notebook
+hr-evaluate --checkpoint checkpoints/distilgpt2/best.pt              # tables vs baselines
+python scripts/make_report.py --checkpoint checkpoints/distilgpt2/best.pt --name distilgpt2
+```
+
+`make_report.py` writes the curves and the scatter plot to `docs/images/`, and the report
+and the per-row CSV to `docs/examples/`. Checkpoints (337 MB for DistilGPT-2) are not
+committed; the run is seeded, so the command above gives the same numbers on the same
+machine, and numbers within a point or two elsewhere (147 test rows is a small sample).
 
 ## Baselines to beat (measured)
 
@@ -60,6 +90,9 @@ input columns as HR-Jev. Reproduce with `hr-evaluate` (it computes them every ti
   higher number on 147 rows would more likely be luck than skill.
 - **JobLevel and MonthlyIncome are easy for a linear model** (76% accuracy, R² 0.83):
   they follow experience and job role closely, so HR-Jev needs to match that first.
+- **A negative R² is not a bug.** R² = 1 − (model error) / (error of always predicting the
+  mean). A model worse than the mean gets a negative value; the trivial baseline (the median
+  income) scores −0.19, and so does HR-Jev in its first epoch before the income head has learned.
 - **147 test rows is small.** For attrition that is 24 leavers: one more or one fewer
   correct moves the leaver recall by about 4 points. Differences of a point or two
   between models are not meaningful; repeating training with several seeds is the next

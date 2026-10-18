@@ -61,9 +61,19 @@ python notebooks/build_notebook.py
 ## How long
 
 The dataset is small: 1,176 training employees with ~165 tokens each, so one epoch
-is 74 steps of 16 employees. **Use a GPU** (the notebook on Kaggle or Colab). On a
-CPU, prefer `--init distilgpt2`; on a laptop CPU shared with other jobs, even that
-took over 30 minutes for one epoch. If you run out of memory, lower `--batch-size`.
+is 74 steps of 16 employees. Measured on an 8-core laptop CPU (no GPU, fp32,
+`OMP_NUM_THREADS=8`), batch 16:
+
+| Model | per step | per epoch | 8 epochs | RAM |
+|---|---:|---:|---:|---:|
+| `--init distilgpt2` (6 layers, 82M) | ~6 s | ~6 min | 44 min | ~3 GB |
+| `--init gpt2` (12 layers, 124M) | ~13 s | ~16 min | ~2 h | ~5 GB |
+
+A free Kaggle/Colab GPU does an epoch in well under a minute (use the notebook).
+If you run out of memory, lower `--batch-size`.
+
+After training, `python scripts/make_report.py --checkpoint <best.pt> --name <run>`
+turns the run into the curves, tables and worked examples shown in the README.
 
 ## All flags
 

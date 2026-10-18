@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "hr-jev"
 version = "0.2.0"
-description = "GPT-2 fine-tuned on employee records: predicts attrition, job level, job satisfaction and monthly income."
+description = "GPT-2 fine-tuned on employee records: predicts attrition, job level, job satisfaction and monthly income. Measured results, worked examples and a Gradio demo included."
 readme = "README.md"
 authors = [{ name = "Ismail Ben Alla", email = "ismailbenalla52@gmail.com" }]
 requires-python = ">=3.10"
@@ -28,13 +28,13 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/benisalla/HR-Jev"
-Documentation = "https://github.com/benisalla/HR-Jev/tree/main/docs"
-Issues = "https://github.com/benisalla/HR-Jev/issues"
+Homepage = "https://github.com/benisalla/hr-jev"
+Documentation = "https://github.com/benisalla/hr-jev/tree/main/docs"
+Issues = "https://github.com/benisalla/hr-jev/issues"
 
 [project.optional-dependencies]
 app = ["gradio>=4.44"]
-dev = ["pytest>=8", "ruff>=0.9", "nbformat>=5", "matplotlib>=3.7"]
+dev = ["pytest>=8", "ruff>=0.9", "nbformat>=5", "matplotlib>=3.7", "playwright>=1.45"]
 
 [project.scripts]
 hr-train = "hr_jev.train:main"

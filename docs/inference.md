@@ -16,6 +16,9 @@ hr-app --share                                         # temporary public gradio
 2. Or edit the form (4 tabs: Personal, Job, Pay, Survey) and click **Predict**.
 3. **Probabilities** shows every class; **What the model reads** shows the exact sentence.
 
+Screenshots and a GIF of the app, made with `scripts/capture_demo.py`, are in the
+README's Demo section.
+
 ## Command line
 
 ```bash
@@ -27,7 +30,19 @@ hr-predict --json employee.json
 ```
 
 It prints one line per task: the predicted class and its probability (or the
-income in dollars), plus the true value for test rows.
+income in dollars), plus the true value for test rows. For example, with the
+DistilGPT-2 checkpoint from `docs/results.md`:
+
+```
+$ hr-predict --checkpoint checkpoints/distilgpt2/best.pt --test-row 4
+Attrition        Leaves (76%)   | actual: Leaves
+JobLevel         Level 1 (100%)   | actual: Level 1
+JobSatisfaction  Very High (32%)   | actual: Low
+MonthlyIncome    $2,145   | actual: $2,033
+```
+
+All 147 test rows, with predictions, are in
+[examples/distilgpt2_test_predictions.csv](examples/distilgpt2_test_predictions.csv).
 
 `employee.json` uses the CSV's own values (e.g. `"Education": 3` for Bachelor):
 
